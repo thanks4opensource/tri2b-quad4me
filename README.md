@@ -56,7 +56,8 @@ Contents  <a name="contents"></a>
 
 
 
-No Warranty  <a name="no_warranty")</a>
+<a name="no_warranty")</a>
+No Warranty
 -----------
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -451,7 +452,7 @@ And finally #2: Above and beyond all these theoretical/design problems, in the r
 
 I hate polled code. I believe all software should be interrupt-driven (or, similarly, be signal-driven when running under an operating system). Preferably with short interrupt system handlers that enqueue instructions into a FIFO which the code's main loop subsequently pops off and executes. 
 
-So why aren't tri2b and quad4me coded on these design principles this repository's [Example Implementations and Testbed](#the_example_implementations_and_testbed)?
+So why aren't tri2b and quad4me coded on these design principles this repository's [Example Implementations and Testbed](#the_example_implementations_and_testbed).
 
 Basically for performance reasons. Low-end ARM cores are documented to have 12 or more clock cycles of interrupt latency (plus a similar number for return from ISR?). Bit-banging is slow already -- these cycles add up. The example implementation attempts to get the number of clock cycles down in the 200 range, although this is largely driven by [rise time](#rise_time) issues.
 
@@ -730,6 +731,8 @@ I will not combine the code into a Debian package, RedHat RPM, or (shudder) Wind
 ### Repository directories and files <a name="repository_directories_and_files"></a>
 
         +-build/
+        +-LICENSE.txt
+        +-README.md
         | +-Makefile.base
         | +-Makefile.triquad
         | +-Makefile.triquad_nxp
@@ -846,7 +849,8 @@ Client application calls protocol object's `protocol()` method
 
 `protocol()` method returns `true` when message finished, `false` (only if configured with `TRIQUAD_BIT_BY_BIT`, see [Build variants](#build_variants), below) otherwise. Client app calls protocol object's `role()` method to determine whether message was received (arbitration loss), or pending message was sent (arbitration win).
 
-Client needs to implement the `meta2bits()` method returning the app-specific number of data bits calculated from the value of the preceding metadata bits. <a name="meta2bits"></a>
+<a name="meta2bits"></a>
+Client needs to implement the `meta2bits()` method returning the app-specific number of data bits calculated from the value of the preceding metadata bits. 
 
 see [Build variants](#build_variants), below
 
@@ -1267,7 +1271,7 @@ Are there any off-the-shelf chips that implement this, likely with additional fe
 
 
 ##### RFIIE: GCC-ARM option for switch/case jump table optimization <a name="RFIIE_gcc_arm_option_for_switch/case_jump_table_optimization"></a>
-A GCC-ARM option to eliminate the range check before jump table in a jump-table-implemented, default-less switch/case statement using an enum variable. See [above](#no_default_switch_case"). Adding the `-Wswitch-enum` flag doesn't help. I have only found a request dated 2004 for this on the GCC sites, with no followups afterwards.
+A GCC-ARM option to eliminate the range check before jump table in a jump-table-implemented, default-less switch/case statement using an enum variable. See [above](#no_default_switch_case). Adding the `-Wswitch-enum` flag doesn't help. I have only found a request dated 2004 for this on the GCC sites, with no followups afterwards.
 
 
 ##### RFIIE: MicroPython implementation <a name="micropython_implementation"></a>
