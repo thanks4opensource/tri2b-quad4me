@@ -1,0 +1,313 @@
+TARGET = $(PROGRAM_NAME).elf
+
+.DEFAULT_GOAL := $(TARGET)
+
+ifeq ($(strip $(OBJS)),)
+    OBJS = $(C_SRCS:.c=.o) $(CXX_SRCS:.cxx=.o)
+    SRCS = $(C_SRCS) $(CXX_SRCS) $(INIT_FILE).c
+endif
+
+FOUNDRY ?= STM        # NXP
+CHIP    ?= STM32L4xx  # LPC8xx
+
+ifndef GCC_ARM_ROOT
+$(error set GCC_ARM_ROOT environment variable)
+endif
+
+ifndef DEVEL_ROOT
+$(error set DEVEL_ROOT environment variable -- typically parent of Makefile.base's director)
+endif
+
+export PATH := $(GCC_ARM_ROOT)/bin:$(PATH)
+
+CC          = arm-none-eabi-gcc
+CXX         = arm-none-eabi-g++
+AS          = arm-none-eabi-as
+LD   	    = arm-none-eabi-ld
+LPCPATCHELF = $(DEVEL_ROOT)/exp/lpcpatchelf
+OBJDUMP	    = arm-none-eabi-objdump
+NM          = arm-none-eabi-nm
+READELF     = arm-none-eabi-readelf
+
+#		 -Wall --warn-no-return-type -Werror=return-type
+WARNINGS_FLAG ?= -Wextra -Wswitch --warn-no-return-type -Werror=return-type
+DEBUG_FLAG    ?= -g
+OPTIMIZE_FLAG ?=
+STANDARD_FLAG ?=
+	       # -DALL_HANDLERS_DEFAULT doesn't make sense with -DWEAK_FUNCTIONS
+INIT_DEFINES  ?= -DWEAK_FUNCTIONS
+
+ifeq ($(OPTIMIZE_FLAG), -O0.5)
+    OPTIMIZE_FLAG := -O0 \
+		     -fbranch-count-reg \
+		     -fcombine-stack-adjustments \
+		     -fcompare-elim \
+		     -fcprop-registers \
+		     -fdefer-pop \
+		     -fforward-propagate \
+		     -fguess-branch-probability \
+		     -fif-conversion \
+		     -fif-conversion2 \
+		     -finline \
+		     -finline-functions-called-once \
+		     -fipa-profile \
+		     -fipa-pure-const \
+		     -fipa-reference \
+		     -fmerge-constants \
+		     -fmove-loop-invariants \
+		     -fomit-frame-pointer \
+		     -freorder-blocks \
+		     -fsched-pressure \
+		     -fsection-anchors \
+		     -fshrink-wrap \
+		     -fsplit-wide-types \
+		     -fssa-phiopt \
+		     -ftoplevel-reorder \
+		     -ftree-bit-ccp \
+		     -ftree-builtin-call-dce \
+		     -ftree-ccp \
+		     -ftree-ch \
+		     -ftree-coalesce-vars \
+		     -ftree-copy-prop \
+		     -ftree-dce \
+		     -ftree-dominator-opts \
+		     -ftree-dse \
+		     -ftree-fre \
+		     -ftree-pta \
+		     -ftree-sink \
+		     -ftree-slsr \
+		     -ftree-sra \
+		     -ftree-ter \
+		     -fvar-tracking \
+		     -fvar-tracking-assignments
+endif
+
+# arm-none-eabi-gcc should already use $(GCC_ARM_ROOT)/arm-none-eabi/include
+# can't += here because app and lib makefiles need to control
+#    search path for e.g. ST-stock vs. others
+# INCLUDES +=  -I$(DEVEL_ROOT)/include
+# following default works for (most?) apps: baresil stuff is explicit,
+#    unmodified ST-stock (from init/*_init.c) gets correct path
+ifeq ($(CHIP), STM32L4xx)
+    INCLUDES ?= -I. \
+		-I$(DEVEL_ROOT)/include \
+		-I$(DEVEL_ROOT)/include/st \
+		-I$(DEVEL_ROOT)/include/st/32l \
+		-I$(DEVEL_ROOT)/include/st/core \
+		-I$(DEVEL_ROOT)/include/st/hal \
+		-I$(DEVEL_ROOT)/include/baresil
+endif
+ifeq ($(CHIP), LPC8xx)
+    INCLUDES   ?= -I. \
+		  -I$(DEVEL_ROOT)/include \
+		  -I$(DEVEL_ROOT)/include/arm \
+		  -I$(DEVEL_ROOT)/include/nxp \
+		  -I$(DEVEL_ROOT)/include/baresil \
+		  -I$(DEVEL_ROOT)/util/lpc
+    CHIP_VPATH ?= $(DEVEL_ROOT)/util/lpc
+endif
+ifeq ($(CHIP), STM32F1xx)
+    FLOATING_POINT ?= NONE
+    INCLUDES   ?= -I. \
+		  -I$(DEVEL_ROOT)/include \
+		  -I$(DEVEL_ROOT)/include/arm \
+		  -I$(DEVEL_ROOT)/include/st/32f \
+		  -I$(DEVEL_ROOT)/include/baresil \
+		  -I$(DEVEL_ROOT)/util/stm32f10_12357xx
+    CHIP_VPATH ?= $(DEVEL_ROOT)/util/stm32f10_12357xx
+endif
+ifeq ($(CHIP), STM32L0xx)
+    FLOATING_POINT ?= NONE
+    INCLUDES   ?= -I. \
+		  -I$(DEVEL_ROOT)/include \
+		  -I$(DEVEL_ROOT)/include/arm \
+		  -I$(DEVEL_ROOT)/include/st/32l \
+		  -I$(DEVEL_ROOT)/include/baresil \
+		  -I$(DEVEL_ROOT)/util/stm32l0x1
+    CHIP_VPATH ?= $(DEVEL_ROOT)/util/stm32l0x1
+endif
+
+
+# see $(GCC_ARM_ROOT)/share/doc/gcc-arm-none-eabi/readme.txt for Cortex-M4
+# FLOATING_POINT ?= NONE
+FLOATING_POINT   ?= HARD
+# FLOATING_POINT ?= SOFT
+
+LD_ARM_FLAGS = -marmelf # -mthumb
+
+ifeq ($(CHIP), STM32L4xx)
+    CC_ARM_FLAGS = -mthumb -mcpu=cortex-m4 # -felide-constructors
+endif
+ifeq ($(CHIP), LPC8xx)
+    CC_ARM_FLAGS = -mthumb -mcpu=cortex-m0plus -D__VTOR_PRESENT
+    FLOATING_POINT = SOFT
+endif
+ifeq ($(CHIP), STM32F1xx)
+    CC_ARM_FLAGS = -mthumb -mcpu=cortex-m3 # -felide-constructors
+endif
+ifeq ($(CHIP), STM32L0xx)
+    CC_ARM_FLAGS = -mthumb -mcpu=cortex-m0plus -D__VTOR_PRESENT
+endif
+
+ifeq ($(FLOATING_POINT), NONE)
+    GNU_ARM_LIBDIRS = -L$(GCC_ARM_ROOT)/arm-none-eabi/lib
+
+else ifeq ($(FLOATING_POINT), HARD)
+    GNU_ARM_LIBDIRS  = -L$(GCC_ARM_ROOT)/arm-none-eabi/lib/thumb/v7e-m \
+		       -L$(GCC_ARM_ROOT)/lib/gcc/arm-none-eabi/6.3.1/thumb/v7e-m/fpv4-sp/hard
+    CC_ARM_FLAGS    += -mfloat-abi=hard -mfpu=vfpv4-d16
+
+else ifeq ($(FLOATING_POINT), SOFT)
+    GNU_ARM_LIBDIRS  = -L$(GCC_ARM_ROOT)/arm-none-eabi/lib/thumb/v7e-m \
+		       -L$(GCC_ARM_ROOT)/lib/gcc/arm-none-eabi/6.3.1/thumb/v7e-m/fpv4-sp/softfp
+    CC_ARM_FLAGS    += -mfloat-abi=softfp -D__SOFTFP__ # -mfpu=vfpv4-d16
+endif
+
+# otherwise won't link without non-existend "unwind" library
+CC_ARM_FLAGS += -fno-exceptions -fno-unwind-tables   
+
+
+
+# LINK_FLAGS    = -static -nostartfiles    # if using gcc to link instead of ld
+LINK_FLAGS      = -static -M --print-memory-usage
+LD_SCRIPT_DIR   = $(DEVEL_ROOT)/ld
+# LD_SCRIPT      ?= ram.ld
+LD_SCRIPT_PATH  = $(LD_SCRIPT_DIR)/$(LD_SCRIPT)
+
+# needed for gcc-arm-none-eabi-6-2017-q1-update
+# not needed (and does not exist) for gcc-arm-none-eabi-8-2018-q4-major
+# GNU_ARM_LIBS += -lnosys # -lgcc -lc_nano
+
+UTIL_LIB_DIR = -L$(DEVEL_ROOT)/lib
+
+CCOPTS  = $(DEPFLAGS) \
+	  $(WARNINGS_FLAG) \
+	  $(DEBUG_FLAG) \
+	  $(CC_ARM_FLAGS) \
+	  $(INCLUDES) \
+	  $(EXTRA_INCLUDES) \
+	  $(EXTRA_DEFINES) \
+	  $(INIT_DEFINES) \
+	  $(OPTIMIZE_FLAG) \
+	  $(EXTRA_CC_FLAGS)
+CXXOPTS = $(DEPFLAGS) \
+	  $(WARNINGS_FLAG) \
+	  $(DEBUG_FLAG) \
+	  $(CC_ARM_FLAGS) \
+	  $(INCLUDES) \
+	  $(EXTRA_INCLUDES) \
+	  $(EXTRA_DEFINES) \
+	  $(OPTIMIZE_FLAG) \
+	  $(EXTRA_CXX_FLAGS)
+LDOPTS  = $(LD_ARM_FLAGS) $(LINK_FLAGS) $(EXTRA_LD_FLAGS)
+LDLIBS  = $(UTIL_LIB_DIR) $(UTIL_LIBS) $(GNU_ARM_LIBS) $(EXTRA_LDLIBS)
+
+$(TARGET): $(OBJS) $(INIT_FILE).o $(LD_SCRIPT_PATH) $(LD_SCRIPT_PATH)
+	$(LD) -o $@ $(LDOPTS)			\
+		    $(OBJS)   			\
+		    $(GNU_ARM_LIBDIRS)		\
+		    $(LDLIBS) 			\
+		    $(INIT_FILE).o		\
+		    -T $(LD_SCRIPT_PATH)	\
+	     > $@.map
+	tail -n 3 $@.map
+
+checksum:
+	$(LPCPATCHELF) -f $(TARGET)
+
+
+.PHONY: clean
+clean:
+	rm -f *.elf *.o *.d *.s *.i *.lst *.dmp *.map *.readelf *.nm *.data *.rodata
+	rm -f $(TARGET)
+
+
+vpath %.c   $(DEVEL_ROOT)/init $(DEVEL_ROOT)/util $(CHIP_VPATH) $(EXTRA_VPATH)
+vpath %.cxx                    $(DEVEL_ROOT)/util $(CHIP_VPATH) $(EXTRA_VPATH)
+vpath %.inl                    $(DEVEL_ROOT)/util $(CHIP_VPATH) $(EXTRA_VPATH)
+
+DEPDIR := .d
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
+POSTCOMPILE = @mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
+
+%.o: %.c
+%.o: %.c $(DEPDIR)/%.d
+	$(CC) -c $(CCOPTS) $< -o $@
+	$(POSTCOMPILE)
+
+%.o: %.cxx
+%.o: %.cxx  $(DEPDIR)/%.d
+	$(CXX) -c  $(STANDARD_FLAG) $(CXXOPTS) $< -o $@
+	$(POSTCOMPILE)
+
+
+# turn off remaking .o from .s made after it (doesn't work)
+# %.o: %.s
+
+
+# optional build products (for debugging)
+
+%.i: %.c
+	$(CC) -E $(CCOPTS) $< -o $@
+
+%.i: %.cxx
+	$(CXX) -E  $(STANDARD_FLAG) $(CXXOPTS) $< -o $@
+
+
+
+# can cause circular depencency warnings
+# %.c.s: %.c
+# 	$(CC) -S -fverbose-asm $(CCOPTS) $< -o $(notdir $@)
+# 
+# %.c.lst: %.c.s
+# 	$(AS) -ahlnd $<  > $(notdir $@)
+# 	rm a.out
+
+# can cause circular depencency warnings
+# %.cxx.s: %.cxx
+# 	$(CXX) -S -fverbose-asm $(CXXOPTS) $< -o $(notdir $@)
+# 
+# %.cxx.lst: %.cxx.s
+# 	$(AS) -ahlnd $<  > $(notdir $@)
+# 	rm a.out
+
+
+%.o.nm: %.o
+	$(NM) -C $< > $@
+
+%.o.dmp: %.o
+	$(OBJDUMP) -dlSC $< > $@
+
+%.o.data: %.o
+	$(OBJDUMP) -sSCj.data $<  > $@
+
+%.o.rodata: %.o
+	$(OBJDUMP) -sSCj.rodata $<  > $@
+
+
+%.elf.nm: %.elf
+	$(NM) -C $< > $@
+
+%.elf.dmp: %.elf
+	$(OBJDUMP) -dlSC $<  > $@
+
+%.elf.data: %.elf
+	$(OBJDUMP) -sSCj.data $<  > $@
+
+%.elf.rodata: %.elf
+	$(OBJDUMP) -sSCj.rodata $<  > $@
+
+%.elf.readelf: %.elf
+	$(READELF) -a $<  > $@
+
+
+
+
+
+
+
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
+
+include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS))))

@@ -1,0 +1,85 @@
+# set in individual Makefiles
+# -DTRIQUAD_TRI2B or -DTRIQUAD_QUAD4ME
+
+# -DTRIQUAD_BIT_BY_BIT or -DTRIQUAD_WHOLE_MESSAGE
+# Whether protocol() method returns false if waiting for bit and true when
+#   message finished, or only when message finished.
+TRIQUAD_PROTOCOL ?= -DTRIQUAD_WHOLE_MESSAGE
+
+# INTERRUPTS or POLLING
+INTRPT_POLL ?= POLLING     
+
+# basic configuration
+NUM_NODES ?= 3
+ARBT_BITS ?= 2
+
+# Node ID and initial or permanant arbitration priority, 
+#   depending on [DYNAMIC_RANK](#dynamic_rank)
+TRIQUAD_ID ?= 0x0
+
+# Enable or disable, and set range of node IDs to dynamically rank
+DYNAMIC_RANK ?= -DDYNAMIC_RANK
+MIN_RANK     ?= -DMIN_DYNAMIC_RANK=0
+MAX_RANK     ?= -DMAX_DYNAMIC_RANK='($(NUM_NODES) - 1)'
+
+# Microseconds to wait after setting data line high (if doesn't go
+#   high because in arbitration phase and other node(s) holding low)
+DATA_WAIT_US ?= 10
+
+# Minimum number of miciroseconds for ALRT and LTCH to be high is tri2b
+MIN_HIGH_US ?= 10
+
+# Enable or disable recording of arbitration win/loss/etc
+STATS ?= -DTRIQUAD_STATS
+
+# Short-circuit randomtest main loop if TRIQUAD_BIT_BY_BIT and no bit received
+PROGRESS ?= -DTRIQUAD_PROGRESS
+
+# Minimum number of microseconds between attempts to send message
+RANDOM_DELAY_US  ?= 2048
+
+# Mask PRNG LSB bits for busy loop counts
+BUSY_MASK ?= 0x1ff
+
+# Hit GDB statistics dprintf breakpoint every (REPORT_AT + 1) messages
+# Must be (2^n)-1 value.
+REPORT_AT ?= 0x1fff
+
+# Reset protocol lines every (RESET_AT + 1) messages
+# NOT IMPLEMENTED
+RESET_AT ?= 0
+
+# Debug options
+EXTRA_MEMBERS  ?= -DTRIQUAD_EXTRA_MEMBERS
+STATE_STRINGS  ?= -DTRIQUAD_STATE_STRINGS
+
+# Build info option
+# change or override to keep in sync with OPTIMIZE_FLAG
+OPTIMIZE_STRING ?= -O1
+
+
+
+# concatenation of all above
+
+TRIQUAD_FLAGS =	-DREPORT_AT=$(REPORT_AT)			\
+		-DRESET_AT=$(RESET_AT)				\
+		-DTRIQUAD_NUM_NODES=$(NUM_NODES)		\
+		-DTRIQUAD_ARBT_BITS=$(ARBT_BITS)		\
+		-DTRIQUAD_ID=$(TRIQUAD_ID)			\
+		-DCLOCK_KHZ=$(CLOCK_KHZ)			\
+		-DCLOCK_MHZ=$(CLOCK_MHZ)			\
+		-DCLOCK_DIV=$(CLOCK_DIV)			\
+		-DRANDOM_DELAY_US=$(RANDOM_DELAY_US)		\
+		-DBUSY_MASK=$(BUSY_MASK)			\
+		-D$(subst XXX,$(INTRPT_POLL),TRIQUAD_XXX)	\
+		-DTRIQUAD_DATA_WAIT_US=$(DATA_WAIT_US)		\
+		-DTRIQUAD_MIN_HIGH_US=$(MIN_HIGH_US)		\
+		  $(TRIQUAD_PROTOCOL)				\
+		  $(PROGRESS)					\
+		  $(STATE_STRINGS)				\
+		  $(EXTRA_MEMBERS)				\
+		  $(STATS)					\
+		  $(DYNAMIC_RANK)				\
+		  $(MIN_RANK)					\
+		  $(MAX_RANK)					\
+		-D$(subst XXX,$(OPTIMIZE_STRING),TRIQUAD_OPTIMIZE_STRING='"XXX"')
