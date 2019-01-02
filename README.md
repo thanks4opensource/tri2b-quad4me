@@ -55,8 +55,7 @@ Contents  <a name="contents"></a>
 
 
 
-
-No Warranty  <a name="no_warranty"></a>
+No Warranty  <a name="no_warranty")</a>
 -----------
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -1264,7 +1263,7 @@ EE's are like cops: They're never around when you need one. ;)
 
 
 ##### RFIIE: Active pullup  <a name="RFIIE_active_pullup"></a>
-I have seen circuit designs which attempt to get around the trade-off inherent with pull-up resistors for open-drain lines (the lower the resistance the faster the rise time on the line but at the cost of more wasted power dissipation). See [Rise Time](#rise_time), above. The circuits seem to work by detecting the voltage level on the line: When the line is near but not at zero volts the circuit switches in a parallel low-value resistor tied to Vss to improve rise time, and then switches it back out when the voltage approaches Vss leaving a higher-valued resistor to hold the line high without excess dissipation.
+I have seen circuit designs which attempt to get around the trade-off inherent with pull-up resistors for open-drain lines (the lower the resistance the faster the rise time on the line but at the cost of more wasted power dissipation). See [Rise Time](#rise_time), above. The circuits seem to work by detecting the voltage level on the line: When the line is near but not at zero volts the circuit switches in a parallel low-value resistor tied to Vdd to improve rise time, and then switches it back out when the voltage approaches Vdd leaving a higher-valued resistor to hold the line high without excess dissipation.
 
 Are there any off-the-shelf chips that implement this, likely with additional features and capabilities (multiple pull-up speeds, lockup protection, etc)? Note that this solution is preferable to I2C buffer/driver chips, as those require a chip/channel for each chip/pin's connection to a communication line compared to one chip/circuit per line for active pullups.
 
