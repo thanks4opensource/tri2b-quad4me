@@ -1,0 +1,1347 @@
+<h1>tri2b and quad4me: clockless arbitrated bit-level serial protocols</h1>
+
+<p><strong>tri2b</strong> and <strong>quad4me</strong> are two clockless, bit-level serial communications protocols supporting arbitration between simultaneous data senders, without requiring any timing or CPU performance guarantees from their software implementations or hardware platforms</p>
+
+<h2>Contents  <a name="contents"></a></h2>
+
+<ul>
+<li><a href="#no_warranty">No Warranty</a></li>
+<li><a href="#description">Description</a>
+
+<ul>
+<li><a href="#features">Features</a></li>
+<li><a href="#drawbacks">Drawbacks</a></li>
+<li><a href="#hardware_requirements">Hardware requirements</a></li>
+</ul>
+</li>
+<li><a href="#motivation_and_background">Motivation and Background</a>
+
+<ul>
+<li><a href="#why_not_bit_bang_i2c">Why not bit-bang I2C?</a></li>
+<li><a href="#what_about_CAN_bus">What about CAN bus?</a></li>
+<li><a href="#why_the_silly_names">Why the silly names?</a></li>
+</ul>
+</li>
+<li><a href="#the_protocols">The Protocols</a>
+
+<ul>
+<li><a href="#two_level_state_machine">Two-level state machine</a>
+
+<ul>
+<li><a href="#states">States</a></li>
+<li><a href="#phases">Phases</a></li>
+</ul>
+</li>
+<li><a href="#tri2b_protocol">tri2b protocol</a></li>
+<li><a href="#quad4me_protocol">quad4me protocol</a></li>
+<li><a href="#edge_vs_level_based">Edge- vs level-based</a></li>
+<li><a href="#arbitration_phase">Arbitration phase</a></li>
+<li><a href="#almost_timing_free">(Almost) Timing-free</a>
+
+<ul>
+<li><a href="#one_line_held_low_at_idle">One line held low at idle</a></li>
+<li><a href="#rise_time">Rise time</a></li>
+</ul>
+</li>
+<li><a href="#the_failed_promise_of_hardware_swapover">The failed promise of hardware swapover</a></li>
+<li><a href="#to_interrupt_or_not_to_interrupt">To interrupt or not to interrupt</a></li>
+<li><a href="#tri2b_or_quad4me_which_one">tri2b or quad4me &ndash; which one?</a></li>
+</ul>
+</li>
+<li><a href="#the_example_implementations_and_testbed">The Example Implementations and Testbed</a>
+
+<ul>
+<li><a href="#using_porting_the_code">Using/porting the code</a></li>
+<li><a href="#the_code_itself">The code itself</a>
+
+<ul>
+<li><a href="#c_coders">C coders</a></li>
+<li><a href="#c_plus_plus_coders">C++ coders</a></li>
+<li><a href="#assembly_coders">Assembly coders</a></li>
+<li><a href="#python_coders">Python coders</a></li>
+<li><a href="#other_coders">Other coders</a></li>
+</ul>
+</li>
+<li><a href="#the_example_build_system">The example build system</a></li>
+<li><a href="#prerequisites_dependencies">Prerequisites/dependencies</a></li>
+<li><a href="#repository_directories_and_files">Repository directories and files</a>
+
+<ul>
+<li><a href="#derived_class_methods">Base class methods implemented in derived classes</a></li>
+</ul>
+</li>
+<li><a href="#the_testbed">The testbed</a></li>
+<li><a href="#build_variants">Build variants</a>
+
+<ul>
+<li><a href="#protocol_variants">Protocol variants</a></li>
+<li><a href="#testbed_variants">Testbed variants</a></li>
+<li><a href="#debug_variants">Debug variants</a></li>
+</ul>
+</li>
+<li><a href="#gdb_test_environment">GDB test environment</a></li>
+<li><a href="#enhancements_improvements">Example implementation enhancements/improvements</a></li>
+</ul>
+</li>
+<li><a href="#RFIIE">Requests For Improvements, Information, and Enhancements (RFIIE)</a>
+
+<ul>
+<li><a href="#RFIIE_generic_request">Generic Request</a></li>
+<li><a href="#RFIIE_non_request"><strong>Non-</strong> Request</a>
+
+<ul>
+<li><a href="#RFIIE_code_formatting">Code Formatting</a></li>
+</ul>
+</li>
+<li><a href="#specific_requests">Specific Requests</a></li>
+</ul>
+</li>
+</ul>
+
+
+<h2>No Warranty  <a name="no_warranty")</a></h2>
+
+<p>This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.</p>
+
+<p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.</p>
+
+<p>You should have received a copy of the <a href="LICENSE.txt">GNU General Public License</a>( along with this program.  If not, see <a href="https://www.gnu.org/licenses/gpl.html">https://www.gnu.org/licenses/gpl.html</a></p>
+
+<h2>Description <a name="description"></a></h2>
+
+<h4>Features <a name="features"></a></h4>
+
+<p><strong>tri2b</strong> and <strong>quad4me</strong> support the following capabilities:</p>
+
+<ul>
+<li><p>multiple <em>nodes</em> (see <a href="#nodes_vs_masters">below</a>) on a single, multi-wire serial bus</p></li>
+<li><p>all nodes receive all messages sent by any (all) other nodes</p></li>
+<li><p>at bus idle, any number of nodes can simultaneously attempt to send a message</p></li>
+<li><p>arbitration to determine which node&rsquo;s simultaneously-sent message acquires the bus (to the exclusion of all others) controlled by sending node&rsquo;s priority</p></li>
+<li><p>optional: node priorities can be dynamic, changing over time via algorithm (e.g. least-recently-used)</p></li>
+<li><p>the protocols are clockless, no pre-determined bit-clock rate</p></li>
+<li><p>throughput is determined by node CPU and I/O speed, limited by open-drain hardware line rise time (see <a href="#rise_time">Rise time</a>)</p></li>
+<li><p>there are (almost) no requirements on CPU timing/speed &ndash; all nodes wait for all others to respond to protocol state transitions (see <a href="#almost_timing_free">(Almost) timing-free</a>)</p></li>
+</ul>
+
+
+<h4>Drawbacks <a name="drawbacks"></a></h4>
+
+<p><strong>tri2b</strong> and <strong>quad4me</strong> have several significant drawbacks compared to other serial communications protocols:</p>
+
+<ul>
+<li><p>&ldquo;bit-banged&rdquo; in software; no hardware support (see <a href="#RFIIE_hardware_support">RFIIE: Hardware Support</a> and <a href="#the_failed_promise_of_hardware_swapover">hardware swapover</a>).</p></li>
+<li><p>require more hardware lines (3 for tri2c, 4 for quad4me) than other protocols (e.g. I2C). See <a href="#RFIIE_fewer_lines">RFIIE: Fewer lines</a></p></li>
+<li><p>one of the open-drain hardware lines must be held low when bus is idle (no communications taking place). See <a href="#RFIIE_no_line_low_at_idle">RFIEE: No line low at idle</a></p></li>
+<li><p>&ldquo;feature&rdquo; <a name="any_node_hangs"></a> of no timing requirements is also a drawback: any node can &ldquo;hang&rdquo; the bus/protocol indefinitely by not/slowly responding. Like I2C &ldquo;clock stretching&rdquo; but worse &ndash; the protocols are &ldquo;stretched&rdquo; by default.</p></li>
+<li><p>tri2b requires reliable detection of rising edges on the hardware lines. See <a href="#tri2b_or_quad4me_which_one">tri2b or quad4me &ndash; which one?</a></p></li>
+<li><p>did I mention the need for three (or four lines) instead of two? ;)</p></li>
+</ul>
+
+
+<h4>Hardware requirements <a name="hardware_requirements"></a></h4>
+
+<ul>
+<li><p>Three (tri2b) or four (quad4me) open-drain GPIO ports</p></li>
+<li><p>GPIO ports must support simultaneous writing to &ndash; setting output low or high (high-Z) &ndash; and reading the input state of attached line independently of the output/write setting.</p></li>
+<li><p>tri2b: <a name="edge_detection_requirement"></a>  Two of the GPIO ports must support hardware detection of falling edges on their communication lines. See <a href="#edge_vs_level_based">Edge- vs level-based</a>, below.</p></li>
+<li><p>Both tri2b and quad4me (if interrupt-driven, see <a href="#to_interrupt_or_not_to_interrupt">To interrupt or not to interrupt</a>, below): Support dynamic enabling/disabling interrupts on falling edges, independent and non-conflicting with the rising edge detection requirement of tri2b.</p></li>
+</ul>
+
+
+<h2>Motivation and Background <a name="motivation_and_background"></a></h2>
+
+<p>(Material in this section is not necessary to understand the protocols or their implementations &ndash; skip ahead to <a href="#the_protocols">The Protocols</a>. On the other hand, a quick skimming over wouldn&rsquo;t hurt.)</p>
+
+<p>What? You&rsquo;re still here. OK, you asked for it &hellip;</p>
+
+<p>When I began designing the hardware project for which tri2b and quad4me were eventually developed, I quickly realized it required the simultaneous sending, arbitration, dynamic prioritization, and all-nodes-receive-all-messages capabilities which they now provide.</p>
+
+<p>Those needs were all driven by the system&rsquo;s requirement for low latency <a name="latency"></a> above all else &ndash; even data throughput, although throughput obviously figures into the total start-to-finish latency.</p>
+
+<p>Being somewhat new to hardware development, I knew little about I2C and SPI other than their existence. My thought at the time was, &ldquo;My requirements must be fairly standard. This has to be a solved problem in the industry. I&rsquo;ll just use whatever off-the-shelf technology fits best. That part of the project, at least, will be easy.&rdquo;</p>
+
+<p>How wrong I was.</p>
+
+<p>I quickly rejected SPI due to its requirement for individual select lines, one for each node, in addition to its clock and data lines. But reading about I2C I immediately came across, and was encouraged by:</p>
+
+<blockquote><p><em>NXP Semiconductors UM10204 I2C-bus specification and user manual Rev. 6, 4 April 2014</em>  (<a href="#i2c_standard">1</a>)</p>
+
+<p>2. I2C-bus features <em>(page 3 of UM10204)</em></p>
+
+<ul>
+<li>It is a true multi-master bus including collision detection and arbitration to prevent data corruption if two or more masters simultaneously initiate data transfer.</li>
+</ul>
+</blockquote>
+
+<p>and:</p>
+
+<blockquote><p>3.1.8 Arbitration <em>(page 11 of UM10204)</em></p>
+
+<p>Arbitration, like synchronization, refers to a portion of the protocol required only if more than one master is used in the system. Slaves are not involved in the arbitration procedure. A master may start a transfer only if the bus is free. Two masters may generate a START condition within the minimum hold time (t HD;STA ) of the START condition which results in a valid START condition on the bus. Arbitration is then required to determine which master will complete its transmission.</p>
+
+<p>Arbitration proceeds bit by bit. During every bit, while SCL is HIGH, each master checks to see if the SDA level matches what it has sent. This process may take many bits. Two masters can actually complete an entire transaction without error, as long as the transmissions are identical. The first time a master tries to send a HIGH, but detects that the SDA level is LOW, the master knows that it has lost the arbitration and turns off its SDA output driver. The other master goes on to complete its transaction.</p>
+
+<p>No information is lost during the arbitration process. A master that loses the arbitration can generate clock pulses until the end of the byte in which it loses the arbitration and must restart its transaction when the bus is free. If a master also incorporates a slave function and it loses arbitration during the addressing stage, it is possible that the winning master is trying to address it. The losing master must therefore switch over immediately to its slave mode.</p></blockquote>
+
+<p><a name="i2c_standard"></a> <em>(1) It is my understanding that Philips developed I2C, and NXP acquired Philips, so I treat this document as somewhat of an official standard. Please correct me if I&rsquo;m wrong.</em></p>
+
+<p>Sounded great. Just what I needed.</p>
+
+<p>Unfortunately &hellip;</p>
+
+<p>After attempting to implement this on several MCUs for more weeks than I care to admit (let&rsquo;s not say &ldquo;months&rdquo;, okay? no mention of &ldquo;months&rdquo;) I was never able to get &ldquo;I2C multi-master&rdquo; mode to work reliably. I won&rsquo;t name the chips and their manufacturers except to say &ldquo;NXP LPC812&rdquo;, &ldquo;NXP LPC824&rdquo;, &ldquo;STM32L031F4P6&rdquo;, and &ldquo;STMF103xx&rdquo;. See <a href="#RFIIE_low_end_arm_mcu_with_working_multi_master_i2c_peripheral_and_library">RFIIE: Low-end ARM MCU with working multi-master I2C peripheral and library</a></p>
+
+<p>To be fair, there were some warning signs. For example, <em>ST RM0008 Reference manual, August 2017</em>, despite claiming on page 752, <em>26.2 I2C main features</em>:</p>
+
+<blockquote><ul>
+<li>Multimaster capability: the same interface can act as Master or Slave</li>
+</ul>
+</blockquote>
+
+<p>has on page 766, <em>26.3.4 Error conditions, Arbitration lost (ARLO):</em></p>
+
+<blockquote><ul>
+<li>the I2C Interface goes automatically back to slave mode (the MSL bit is cleared). When the I2C loses the arbitration, it is not able to acknowledge its slave address in the same transfer, but it can acknowledge it after a repeated Start from the winning master.</li>
+</ul>
+</blockquote>
+
+<p>I&rsquo;m still willing to believe my failure to get this working was due to  my inability to decipher the (miserable excuses that pass for) documentation and/or  reverse-engineer the chips. But after weeks of effort (not &ldquo;months&rdquo;, nobody said anything about &ldquo;months&rdquo;) I broke down and asked two friends, who between them have almost 60 years of embedded programming experience and are among the smartest people I&rsquo;ve ever met. Both said essentially the same thing, which was: &ldquo;I&rsquo;ve never heard of anyone using I2C multi-master mode. Given all the bugs that are in these kinds of chips, I&rsquo;m not surprised that it doesn&rsquo;t work.&rdquo;</p>
+
+<p>Thanks a lot. Could have saved me, uhh, &ldquo;weeks&rdquo;, of beating my head against the wall/chips. Again in the interest of full disclosure, one of the friends, who, when I started the project and told him, &ldquo;I&rsquo;m not afraid of embedded development: I&rsquo;ve had to code against some of the worst, buggy, un- and mis-documented software APIs ever written,&rdquo; replied back to me, &ldquo;The embedded world is worse!&rdquo;</p>
+
+<p>I didn&rsquo;t believe him at the time.</p>
+
+<p>I was wrong.<br/>
+<br></p>
+
+<p><a name="required_i2c_features"></a>
+Also admittedly, my requirements push I2C multi-master to the limits. The &ldquo;all nodes receive all messages&rdquo; and &ldquo;arbitration is based on node priority&rdquo;  means that either:</p>
+
+<ol>
+<li><p>All nodes send to, and receive on, the I2C &ldquo;general call&rdquo; address, with my scheme&rsquo;s priority in the next, post-address, data byte. This means the arbitration loss and switch-over to receiver (&ldquo;slave&rdquo;) mode has to take place not on the address byte but on a later one, which is probably even farther down the rabbit hole of I2C edge-case features. Or &hellip;</p></li>
+<li><p>The chip/peripheral needs to support multiple receive addresses. This way the I2C address could be used as my scheme&rsquo;s priority. Some chips implement this, but in limited ways that make them unsuited for my purposes. For example, STMF103xx supports two addresses &ndash; not enough. NXP&rsquo;s LPC824 supports four addresses, again not enough, but one of them can be generalized with a mask of &ldquo;don&rsquo;t care&rdquo; bits. (Other chips have this and/or a min-max range of addresses.) That would work, but at least the LPC824 (and others I&rsquo;ve looked at) only indicate <em>that</em> one of the masked/range of addresses matched and data is being received &ndash; not <em>which</em> address, so again are useless for my needs.</p></li>
+</ol>
+
+
+<p>Finally &hellip; why not use I2C the way it was intended to be used? One master, multiple slaves, master polls slaves (setting the &ldquo;read&rdquo; bit in the address byte) and slaves respond by sending data using the &ldquo;slave send to master&rdquo; protocol. One word: <a href="#latency">Latency</a> (see above). I have lots of nodes and can&rsquo;t afford the latency of round-robin polling each in sequence just to get data from one.</p>
+
+<h4>Why not bit-bang I2C? <a name="why_not_bit_bang_i2c"></a></h4>
+
+<p>So &hellip; if I2C multi-master is great (design) but fails (implementation), and I&rsquo;m going to have to write software bit-banging code anyway, why not do it for the well-known, tested, possibly working in some hardware (for compatibility) I2C protocol instead of &ldquo;rolling&rdquo; my own?</p>
+
+<p>Good question. Here&rsquo;s the hopefully good answer &hellip;</p>
+
+<p>Again looking at <em>NXP Semiconductors UM10204 I2C-bus specification and user manual Rev. 6, 4 April 2014</em>, this time <em>page 11, Section 3.1.7 Clock synchronization, Fig 7. Clock synchronization during the arbitration procedure</em>.</p>
+
+<p>Without endlessly quoting from the document (read it &ndash; it&rsquo;s good stuff), clock synchronization is the first part of the arbitration process. When one or more &ldquo;masters&rdquo; lower the SCL line to initiate a transaction, all other masters which wish to compete in arbitration detect this and lower their outputs to the SCL line to match.</p>
+
+<p>When each master&rsquo;s SCL LOW time period expires it raises its SCL output. Due to the &ldquo;wired-AND&rdquo; nature of the open-drain line, the line doesn&rsquo;t go high until all have raised their outputs. When each master sees the line go high, it begins timing its SCL HIGH period, and, again, when this expires it lowers its output again.</p>
+
+<p>In this way, the LOW period lasts from the first master to go low until the last to go high, and the HIGH period from the last to go high until the first to go low. This achieves the clock synchronization, and logical arbitration based on address bit values is layered on top of this lower-level clock timing.</p>
+
+<p>This works well in hardware, both by virtue of logic speeds (much faster than software) and because the MCU&rsquo;s I2C peripheral subsystem is doing nothing except watching for and executing the protocol.</p>
+
+<p>But consider trying to emulate it in bit-banging software. One or more nodes may be &ldquo;busy&rdquo; when the SCL line first goes low &ndash; either due to executing some other code in a polling loop, or interrupt latency (raw latency,  because another interrupt is executing at higher priority, etc). That/those node(s) might respond to the the SCL falling edge late, <em>after</em> other, non-slow masters allow the SCL line to go high. The slow nodes could then lower their SCL
+outputs on the next (or later) clock cycle without knowing they&rsquo;re late, and put their data bits on the I2C SDA line at the wrong time.</p>
+
+<p>This is the &ldquo;timing/performance requirement&rdquo; that tri2b and quad4me were designed to eliminate. Nodes (&ldquo;masters&rdquo;) can respond to protocol changes on the hardware lines as quickly or slowly as they choose, and the protocols remain in synchronization. See <a href="#the_protocols">The Protocols</a>.</p>
+
+<h4>What about CAN bus? <a name="what_about_CAN_bus"></a></h4>
+
+<p>Basically another good question. This section is an attempt to answer it proactively.</p>
+
+<p>CAN bus &ndash; in principle &ndash; would solve all my problems. In practice there are reasons why it doesn&rsquo;t. In roughly more-important-to-less order:</p>
+
+<ol>
+<li><p>CAN bus is very poorly supported, especially on low-end, low-pin-count chips. The last time I checked, DigiKey listed only one TSSOP-20 chip with CAN. I&rsquo;ve heard this may be due to restrictive licensing issues (hooray for open source, hint, hint).</p></li>
+<li><p>CAN bus is electrical overkill for my application. I need to place approximately 10 to 20 nodes on a 12-to-24 inch long bus. See <a href="#RFIIE_gpio_drive_capability">RFIIE: GPIO drive capability</a>. CAN bus, with its twisted pair lines and balanced drivers is designed for tens of nodes over tens of meters distance.</p></li>
+<li><p>CAN bus (nominally) requires external balanced-line driver chips. I&rsquo;m aware of the driver-less diode &ldquo;hack&rdquo; but don&rsquo;t know how well it works.</p></li>
+<li><p>CAN bus' software protocol is overkill for my needs (error correction, &ldquo;mailboxes&rdquo;, etc).</p></li>
+<li><p>CAN bus comes in &ldquo;variants&rdquo;, including STM&rsquo;s &ldquo;bxCAN&rdquo;. Given my experiences with I2C multi-master implementation failures, this fact does not fill me with confidence regarding the inter-operability of the implementations.</p></li>
+</ol>
+
+
+<p>But again, I&rsquo;m open to suggestions. See (<a href="#RFIIE_low_end_arm_mcu_with_working_inter_operable_can_bus_and_library">RFIIE: Low-End ARM MCU with working inter-operable CANbus (and library)</a>).</p>
+
+<p>Also any other existing protocols/algorithms. See <a href="#RFIIE_alternative_existing_protocol_algorithm">RFIIE: Alternative, existing protocol/algorithm</a>.</p>
+
+<p>Finally, if this was Stack Overflow, the <em>second</em> answer to everything I&rsquo;ve written in this section would be, &ldquo;Why doan u use CANbus, u mow-rhan? Ain&rsquo;t I smart 2 be the 1st wun to post dis?&rdquo; (The first would be a response to the <a href="#features">&ldquo;Features&rdquo;</a> section, above &ndash; the canonical &ldquo;Why would you want to do that?&rdquo;) C'mon, GitHub. Get with the program!</p>
+
+<h4>Why the silly names? <a name="why_the_silly_names"></a></h4>
+
+<p>The original name for the three-line protocol was &ldquo;tri2c&rdquo;. Stupid pun off some other serial protocol I&rsquo;d heard of. But, you know &hellip; lawyers and all that. So I came up with &ldquo;tri2b&rdquo;, as in it &ldquo;tries to be&rdquo; a workable protocol.</p>
+
+<p>Due to some development snafus that I don&rsquo;t care to describe (eventually traced to a certain GCC-ARM compiler optimizing out calls to inline functions despite those functions accessing declared-volatile registers) (days, not weeks &ndash; nobody said anything about &ldquo;weeks&rdquo;) I was for a time convinced that the edge based approach (see <a href="#edge_vs_level_based">Edge- vs level-based</a>) of tri2b was flawed by design. In desperation I switched development to the level-based quad4me, it being the fallback solution &ldquo;for me&rdquo;.</p>
+
+<p>I have long thought that when it comes to software libraries, the &ldquo;cuter&rdquo; the name, the lower the quality. Your mileage may vary.</p>
+
+<p>Or not.</p>
+
+<h2>The Protocols  <a name="the_protocols"></a></h2>
+
+<p>Both protocols, tri2b and quad4me, are software state machines sequenced by multiple open-drain hardware lines which, in combination, comprise a serial communication bus.</p>
+
+<p>Multiple <em>nodes</em> (<a href="#nodes_vs_masters">1</a>) &ndash; running a protocol state machine on an MCU chip &ndash; connect to the bus. Each node connects to each of the bus lines via open-drain GPIO ports.</p>
+
+<p><em>Messages</em>, consisting of a fixed-length number of <em>arbitration</em> bits, a fixed-length number of <em>metadata</em> bits, and a variable-length number of <em>data</em> bits are sent from any node to all other nodes simultaneously. If two nodes attempt to send at the same time, the arbitration bits control which one gains control of the bus.</p>
+
+<p>The bus has one data line and two or more &ldquo;handshake&rdquo; lines, at least one of which is held low by all of the nodes at each state machine state. State machine transitions occur when <strong>all</strong> of the nodes raise their outputs to the line high (high impedance). This is the &ldquo;wired-AND&rdquo; logic of open-drain lines.</p>
+
+<p>That&rsquo;s it. The whole thing. Implementation is left as an exercise for the reader. Should only take a few hours.</p>
+
+<p>What? You&rsquo;re still here? Alright &hellip; I&rsquo;ll provide some more details &hellip;</p>
+
+<p><a name="nodes_vs_masters"></a> <em>(1) &ldquo;nodes&rdquo;==&ldquo;masters&rdquo; in I2C/SPI nomenclature, but given that tri2b and quad4me have no &ldquo;slaves&rdquo; &ndash; all nodes are equal/hierarchy-less &ndash; and because that whole &ldquo;master/slave&rdquo; thing is so pre-13th Amendment &ndash; I use the term &ldquo;node&rdquo; instead.</em></p>
+
+<p><a name="two_level_state_machine"></a></p>
+
+<h3>Two-level state machine</h3>
+
+<p>(And I thought I could get away without documenting all this. Oh, well.)</p>
+
+<p>The state machines actually consist of two levels:</p>
+
+<p><a name="states"></a>
+1) A lower-level set of states, per-line-transition, called simply &ldquo;States&rdquo;. The states are READ, WRIT (&ldquo;write&rdquo;), and in the case of quad4me, NEXT. Each bit of a message requires a transition through each of these states in sequence.</p>
+
+<p><a name="phases"></a>
+2) A higher-level set of states called &ldquo;Phases&rdquo;. Multiple bits, each communicated via the READ/WRITE/(NEXT) States, make up the phases: IDLE, ARBT (arbitration), META (metadata), and DATA (data). The IDLE phase has zero bits, ARBT and META a fixed number, and DATA a variable number (possibly zero) specified by the META bits, (see <a href="#meta2bits">meta2bits()</a>, below)).</p>
+
+<h3>tri2b protocol <a name="tri2b_protocol"></a></h3>
+
+<p>tri2b requires one DATA line, and two handshake lines which I&rsquo;ve labeled more-or-less arbitrarily ALRT (&ldquo;alert&rdquo;) and LTCH (&ldquo;latch&rdquo;).</p>
+
+<p>The electrical/logical high and low states of the lines, which in turn drive the <a href="#states">State</a> transitions, look like this:</p>
+
+<p><a name="tri2b_timing_diagram"></a></p>
+
+<pre><code>    DATA  :X::?::X::?::X::?::X::?::X::?::X::?::X::?::X::?:::::
+          W      W     W     W     W     W     W     W     W 
+    ALRT  ~~\___/~\___/~\___/~\___/~\___/~\___/~\___/~\___/~~~
+              R     R     R     R     R     R     R     R     
+    LTCH  ___/~\___/~\___/~\___/~\___/~\___/~\___/~\___/~\____
+
+    Legend:
+    :    data line, either high or low
+    X    data line, data bit written: high-&gt;high, high-&gt;low, low-&gt;high, or low-&gt;low
+    ?    data line, data bit read
+    ~    handshake line high
+    _    handshake line low
+    /    handshake line, low-&gt;high
+    \    handshake line, high-&gt;low
+    R    READ State
+    W    WRIT State
+</code></pre>
+
+<p>A message starts when one or more nodes which have data to send place the first of their arbitration (priority) bits on their DATA ports, then lower their ALRT ports, and finally raise their LTCH ports. When LTCH goes high (wired-AND), all (sending) nodes have placed their data and the DATA line is ready to be read.</p>
+
+<p>When all other nodes detect a falling edge on their ALRT ports, they likewise set their DATA output. If they have data to send and have detected the falling edge (or have been interrupt-triggered by it, see <a href="#to_interrupt_or_not_to_interrupt">To interrupt or not to interrupt</a>, below) before they have initiated the message sequence themselves, they place their first arbitration bit. If they don&rsquo;t have data to send, they raise their DATA output high (see <a href="#non_competing_nodes">&ldquo;non-competing nodes&rdquo;</a>, below). They then lower their ALRT output, and raise their LTCH output.</p>
+
+<p><strong>This is the &ldquo;clockless&rdquo; / &ldquo;no timing requirements&rdquo; basis of the protocols</strong>. No state transition into READ state can take place until <strong>all</strong> nodes have raised their LTCH ports due to the open-drain, wired-AND nature of the lines.</p>
+
+<p>Every node then reads the input bit on its DATA port, lowers its LTCH port, and finally raises its ALRT port. The ALRT line going high is a signal that all nodes have read the data line, and all can transition to the next WRIT State.</p>
+
+<p>This per-bit sequence continues through the <a href="#arbitration_phase">arbitration</a> phase and similarly for the metadata and data phase. The only difference is that during the metadata and data phases only one node (the arbitration winner) is placing data bits on the data line &ndash; all others leave their DATA ports high so as not to interfere. (See <a href="#the_failed_promise_of_hardware_swapover">The failed promise of hardware swapover</a>, below.)</p>
+
+<p>Note that the exact order of the above sequences of events &ndash; the raises and lowers of the handshake lines &ndash; is absolutely critical. See <a href="#almost_timing_free">(Almost) Timing-free</a>, below.</p>
+
+<h3>quad4me protocol  <a name="quad4me_protocol"></a></h3>
+
+<pre><code>    DATA  :X::?:::X:?:::X:?:::X:?:::X:?:::X:?:::X:?:::X:?:::::
+                N     N     N     N     N     N     N     N 
+    ALRT  ~~\__/~~\__/~~\__/~~\__/~~\__/~~\__/~~\__/~~\__/~~~~
+              R     R     R     R     R     R     R     R     
+    LTCH  ___/~~\__/~~\__/~~\__/~~\__/~~\__/~~\__/~~\__/~~\___
+           W      W     W     W     W     W     W     W     W
+    CYCL  ~~~~\__/~~~\_/~~~\_/~~~\_/~~~\_/~~~\_/~~~\_/~~~\_/~~
+
+    Legend:
+    :    data line, either high or low
+    X    data line, data bit written: high-&gt;high, high-&gt;low, low-&gt;high, low-&gt;low
+    ?    data line, data bit read
+    ~    handshake line high
+    _    handshake line low
+    /    handshake line, low-&gt;high
+    \    handshake line, high-&gt;low
+    R    READ State
+    W    WRIT State
+    N    NEXT State
+</code></pre>
+
+<p>The quad4me protocol is very similar to tri2b with the exception of an additional NEXT State after READ and before WRIT. This extra State is required due to the following &hellip;</p>
+
+<h3>Edge- vs level-based <a name="edge_vs_level_based"></a></h3>
+
+<p>Because State transitions in tri2b are triggered by edges (rising, except for the initial message start falling edge), the handshake lines can be lowered at any time after the rising edge takes place. This freedom does not exist in a level-based protocol such as quad4me.</p>
+
+<p>Consider the LTCH line rising edges in the tri2b <a href="#tri2b_timing_diagram">timing_diagram</a>, above. If this were a level-based protocol, the LTCH line would need to stay high until the ALRT line went high signaling all nodes have read the DATA line and all can transition to WRIT State.</p>
+
+<p>The LTCH line needs to stay high because if not, one or more &ldquo;fast&rdquo; nodes could read the data line and lower their LTCH ports (the first one to do so would lower the line due to open-drain wired-AND electrical physics) and one or more &ldquo;slow&rdquo; nodes that hadn&rsquo;t seen LTCH high yet would miss their READ states.</p>
+
+<p>So &hellip; why not wait until after ALRT goes high to lower LTCH? That would leave the door open to a different race condition: One or more fast nodes could see the ALRT line high, place their next data bit, lower their ALRT and raise their LTCH ports before one or more of the slow nodes had lowered their LTCH ports. This would cause the LTCH line to go back high signaling that the new data bit was ready to be read when in fact the slow nodes had not yet put their next bits on the DATA line.</p>
+
+<p>This is the reason for the four-line (three handshake plus data) requirement of the level-based quad4me protocol (and, conversely, why the edge-based tri2b needs only two handshake lines). It&rsquo;s also why quad4me is <a name="theoretically_faster"></a> (theoretically &ndash; see <a href="#rise_time">Rise Time</a>, below) 1.5 times slower than tri2b: It requires three States per bit instead of two.</p>
+
+<p>I would be extremely interested in a protocol design that avoids this conundrum. See <a href="#RFIIE_three_or_fewer_line_level_based_protocol">RFIIE: A three (or fewer) line level-based protocol</a>, below.</p>
+
+<h3>Arbitration phase  <a name="arbitration_phase"></a></h3>
+
+<p>In both tri2b and quad4me, arbitration is handled by the well-known &ldquo;first zero bit wins&rdquo; algorithm, which leverages the wired-AND logic of open-drain communication lines.</p>
+
+<p><a name="non_competing_nodes"></a>
+In their arbitration phases, nodes running the protocols which have data they wish to send place their arbitration bits, in MSB-to-LSB order, on the DATA line according to the bitwise State protocols described above. Nodes without data to send always place &ldquo;1&rdquo; bits and thus do not compete for arbitration.  All nodes read the current arbitration bit on their DATA ports at the appropriate State time.</p>
+
+<p>Due to the wired-AND logic, if <strong>any</strong> node places a &ldquo;0&rdquo; bit (lowers the data line), the line will go low regardless of if and how many other nodes are placing &ldquo;1&rdquo; bits (logic high, i.e. high-impedance on an open-drain port) at that instant.</p>
+
+<p>Each node compares the current DATA line value (zero or one) to its own current arbitration bit, and if its bit is &ldquo;1&rdquo; and the line is &ldquo;0&rdquo;, drops out of arbitration (loses). For all subsequent bits it places a &ldquo;1&rdquo; on the line, as do all non-competing nodes from the beginning MSB.</p>
+
+<p>In this way the node with the lowest arbitration number (lowest number == highest priority) &ndash; the one which has never had a &ldquo;1&rdquo; overridden by a &ldquo;0&rdquo; &ndash;  wins. (Non-competing nodes will always lose by this logic.)</p>
+
+<p>For example:</p>
+
+<pre><code>                   node #5               node #2              node #9                node #3
+Bit    Line   Arbt=5 Write Result   Arbt=2 Write Result   Arbt=9 Write Result   Arbt=3 Write Result
+ 3       0     0101    0    pend     0010    0    pend     1001    1    lose     0011    0    pend
+ 2       0     0101    1    lose     0010    0    pend     1001    1    lost     0011    0    pend
+ 1       1     0101    1    lost     0010    1    pend     1001    1    lost     0011    1    pend
+ 0       0     0101    1    lost     0010    0    win      1001    1    lost     0011    1    lose
+</code></pre>
+
+<p>Note that this is <strong>not</strong> the same as the logical AND of the arbitration values:</p>
+
+<pre><code>0b0101 &amp; 0b0010 &amp; 0b1001 &amp; 0b0011 = 0b0000
+</code></pre>
+
+<p>In which case a non-existent node 0b0000 would &ldquo;win&rdquo;.</p>
+
+<p>For an optional enhancement to arbitration process, see <a href="#dynamic_rank">DYNAMIC_RANK</a>, below.</p>
+
+<h3>(Almost) Timing-free <a name=almost_timing_free></a></h3>
+
+<h4>One line held low at idle <a name="one_line_held_low_at_idle"></a></h4>
+
+<p>As shown in the protocol <a href="#tri2b_timing_diagram">timing diagram</a> above, in both tri2b and quad4me all handshake lines must be initialized to  known conditions at idle (before a message starts). The ALRT (and CYCL for quad4me) must be high, and the LTCH line low.</p>
+
+<p>This presents two problems, one electrical and one logical. The electrical one is that the low LTCH line consumes power via its pullup resistor (see <a href="#RFIIE_active_pullup">RFIIE: Active pullup</a>, below) whenever the bus is idle, which is likely to be most of the time in a practical application of the protocols.</p>
+
+<p>The logical problem is: How can the line be initialized to its required known-low condition? How can any/all nodes detect that <strong>all</strong> other nodes have lowered their LTCH ports?</p>
+
+<p>The &ldquo;high&rdquo; lines are easy &ndash; when they are high, by the definition  of open-drain line electrical physics, all nodes' ports must be high (high-impedance). (Actually it&rsquo;s not quite that trivial &ndash; an uninitialized node might coincidentally be outputting high without truly being ready to start the protocol.)</p>
+
+<p>But the required-low is much harder, if not impossible. Any single node outputting a low will cause the line to be low. In fact, the protocols leverage this fact in that any one (or more) nodes lowering the ALRT line signals a message start. LTCH has to be low so that when it does go high it&rsquo;s certain that all the nodes have set it as such.</p>
+
+<p><a href="#the_example_implementations_and_testbed">The Example Implementations and Testbed</a> skirts this problem by simply delaying a known amount of time at system initialization and taking on faith that all nodes have initialized during that period. This is implemented by:</p>
+
+<ol>
+<li>Waiting for all communication lines to go high.</li>
+<li>Waiting a fixed period of time while checking if LTCH has gone low.</li>
+<li>Lowering LTCH. The first node to do so will break all others out of their wait loops even if their time periods have not expired.</li>
+<li>Waiting another fixed period of time.</li>
+</ol>
+
+
+<p>I would be extremely interested in a timing-less solution to this problem.  See <a href="#RFIIE_no_line_low_at_idle">RFIIE: No line low at idle</a>, below. At one point I had a very complex scheme in which each node enumerated itself on the bus, one at a time, in arbitrary order, until all had done so.  In the end the scheme was unreliable because it used (a variation of) the protocol to do the enumeration and  a node coming onto the bus at the wrong time, driving the lines incorrectly,  could break it.</p>
+
+<p>This problem brings to mind the old question: &ldquo;Quick, grasshopper. What is the sound of one hand clapping?&rdquo;</p>
+
+<h4>Rise time <a name="rise_time"></a></h4>
+
+<p>In the glittering pristine crystal palace of logic built by George Boole, the above protocols achieve their goal of timing-free execution. In the dirty real world of noisy electrical voltage levels, not so much.</p>
+
+<p>Consider the timing diagrams <a href="#tri2b_timing_diagram">above</a>. All of them explicitly depend on one State being completely finished before a rising edge (tri2b) or logic high (quad4me) on a line signals a transition to the next State. For example, nodes output data bits on their DATA ports first, and <strong>then</strong> raise their LTCH ports. When the wired-AND LTCH line goes high it&rsquo;s known for certain that the DATA line is ready.</p>
+
+<p>Maybe yes, maybe no.</p>
+
+<p>Due the rise time of signals (determined by the line&rsquo;s resistance-capacitance time constant) the transitions, particularly from low-to-high, are not instantaneous. In fact, there is a trade-off between the power wasted by the open-drain pull-up resistors and the speed of the  rise time. See <a href="#RFIIE_active_pullup">RFIIE: Active pullup</a>, below.</p>
+
+<p>If all the lines have identical rise times, and if all the GPIO ports read the same value at the same line voltage level and/or register edges at the same place on the rising waveform, having set the DATA line before the LTCH should be sufficient. If not &ndash; as is likely &ndash; workarounds are needed. See <a href="#data_wait_us">DATA_WAIT_US</a> in the <a href="#build_variants">Build variants</a>, below. This is especially problematic because in the META and DATA phases a node can raise its handshake line output and wait only until it reads that the line has gone high. But in the ARBT phase another node&rsquo;s bit may be low and the line will never go high during that STATE time period. For this reason, a fixed timout has to be implemented.</p>
+
+<p>Also: The tri2b protocol raises and lowers the handshake lines without intermediate states providing delays as in quad4me. See <a href="#tri2b_timing_diagram">tri2b waveforms</a>, above. This may be problematic for real-world (as compared to theoretical) edge detection. The example implementatation provides <a href="#min_high_us">MIN_HIGH_US</a> to compensate if necessary.</p>
+
+<h4>The failed promise of hardware swapover <a name="the_failed_promise_of_hardware_swapover"></a></h4>
+
+<p>The tri2b and quad4me protocols were developed due to a (my) failure to get hardware-implemented I2C multi-master arbitration working.</p>
+
+<p>But &hellip; after tri2b/quad4me arbitration takes place, only a single node is sending, and all others receive. Why not, at that time, switch to a much faster (than bit-banging) hardware-implemented standard protocol like I2C/SPI/USART for the metadata and/or data phases? Moreover, if SPI or USART, the hardware GPIO ports could be switched from open-drain to push-pull for much faster rise times and bitrates, and then switched back for the next tri2b/quad4me arbitration.</p>
+
+<p>I tried implementing this idea. A lot. (Uhh, &ldquo;weeks&rdquo;).  Unfortunately nothing worked, due to both hardware protocol limitations and/or MCU peripheral implementation problems.</p>
+
+<p>All of the hardware protocols require some kind of flow control, either on their own or via separate, out-of-band signaling, because more than one meta/data byte can be required for each message.  USART&rsquo;s RTS/CTS/etc flow control looked promising (both tri2b and quad4me have an extra communication line beyond data and clock that could be used) but unfortunately, despite the fact that everything else in USART is configurable (clock and data polarity, etc) no MCU peripheral supports RTS/CTS being low==true as opposed to the standard high. And low==true is needed to implement the wired-AND, sender sends only when all receivers are ready, logic.</p>
+
+<p>SPI initially looked even better, both for its faster data rates and (in most implementations) ability to send/receive up to 16 bits at a time. But it needs external flow control for more than 16 bits, and at least on the NXP chips requires a hardware line/port to enable slave reception of data. (Why? With all the configurable bits in the peripheral, why not have one that sets &ldquo;always enabled&rdquo;?). The 3- and 4-wire tri2b/quad4me interface doesn&rsquo;t have a line to spare &ndash; two are required for flow control handshaking, plus SPI clock and data, so even 4-wire quad4me falls short. (<strong>Five</strong> lines?? Three or four is bad enough!) (And in my specific system I don&rsquo;t have a spare pin to tie permanently high.)</p>
+
+<p>Finally, I2C. Ironic given that if I2C multi-master worked tri2b and quad4me  wouldn&rsquo;t be necessary. I2C &ldquo;swapover&rdquo; problems include the fact that even though the &ldquo;clock stretching&rdquo; logic is low==true and explicitly supports any of the multiple slaves controlling the flow, the ACK bit on the data line is high==true and thus the converse.</p>
+
+<p>And finally #2: Above and beyond all these theoretical/design problems, in the real  world I found that the MCUs I tried could not reliably switch their ports back and forth at per-message speeds between standard GPIO functionality (for tri2b/quad4me arbitration) and &ldquo;special purpose&rdquo; peripherals (I2C/SPI/USART). Pulse glitches on the lines? I don&rsquo;t know &ndash; I have neither a &lsquo;scope or a logic analyzer. But I would welcome any ideas on these subjects; see <a href="#rfiie_hardware_swapover">RFIIE: Hardware swapover</a>, below.</p>
+
+<h4>To interrupt or not to interrupt <a name="to_interrupt_or_not_to_interrupt"></a></h4>
+
+<p>&hellip; that is the question.</p>
+
+<p>I hate polled code. I believe all software should be interrupt-driven (or, similarly, be signal-driven when running under an operating system). Preferably with short interrupt system handlers that enqueue instructions into a FIFO which the code&rsquo;s main loop subsequently pops off and executes.</p>
+
+<p>So why aren&rsquo;t tri2b and quad4me coded on these design principles this repository&rsquo;s <a href="#the_example_implementations_and_testbed">Example Implementations and Testbed</a>.</p>
+
+<p>Basically for performance reasons. Low-end ARM cores are documented to have 12 or more clock cycles of interrupt latency (plus a similar number for return from ISR?). Bit-banging is slow already &ndash; these cycles add up. The example implementation attempts to get the number of clock cycles down in the 200 range, although this is largely driven by <a href="#rise_time">rise time</a> issues.</p>
+
+<p>My initial implementations of tri2b/quad4me triggered their ISR multiple times per bit (at each <a href="#states">State</a> transition, above). I quickly found that they ran in an &ldquo;interrupt storm&rdquo;, never getting back to the main loop until a full message was complete.</p>
+
+<p>Even using one interrupt per message can slow throughput down compared to a polled approach. (Less  so if the protocol&rsquo;s <a href="#protocol_method">protocol() method</a> is inlined into the applications main loop to avoid function call and return overhead.)</p>
+
+<p>But <a href="#latency">latency</a> was the primary design requirement for tri2b/quad4me. Due to the <a href="#any_node_hangs">&ldquo;any slow node can hang the protocol&rdquo;</a> nature of the design, an interrupt-driven approach is necessary to insure all nodes run the protocol as expediently as possible. The only exceptions to this would be if the main loop only executed very brief snippets of code per loop before re-polling <code>protocol()</code>.</p>
+
+<p>The <code>protocol()</code> method in the example implementation can be compiled to execute  either <a href="#triquad_bit_by_bit_vs_triquad_whole_message">bit-by-bit or whole-message</a>. The former, in which it returns when and if a new bit is not immediately on the bus (see <a href="#rise_time">rise time</a>) is probably only useful if there is a large &ndash; factor of 100  or more &ndash; disparity between different hardware nodes' processing power. Otherwise even the fastest nodes would likely have too few cycles available to perform any useful work, and the call/return overhead (unless inlined) would predominate.</p>
+
+<p>There are some subtleties involved if the example implementation is compiled with <a href="#triquad_polling_vs_triquad_interrupts">TRIQUAD_POLLING</a>. The interrupt handler will trigger on incoming messages, and after doing send any pending messages the client application may have registered but have not been sent yet due to arbitration losses. This of course in addition to receiving any arbitration-winning messages.</p>
+
+<p>But the client app needs to send newly register pending messages, either immediately or at some other time of its choosing. Calling the <code>protocol()</code> method directly leaves open possibility getting a falling edge interrupt before the interrupt has been disabled, and recursively entering <code>protocol()</code> again.</p>
+
+<p>A number of such race conditions are possible, even if the call to <code>protocol()</code> is bracketed by disabling and re-enabling the interrupt. All can be avoided by having the client application invoke <code>protocol()</code> by triggering the interrupt via the NVIC ISPR (set pending interrupt) register instead. This is how the example implementation is coded.</p>
+
+<p>And add one more entry to the <a href="#everyone_will_hate">&ldquo;everyone will hate&rdquo;</a> list, below: Long interrupt service handlers. Compiling with TRIQUAD_POLLING will build what is probably one of the longest-running ISRs ever written. I&rsquo;m on the fence on this one. It&rsquo;s allowed if following the alternate design philosophy of running the entire application in the ISR(s) &ndash; the implementation here is close to that. It&rsquo;s actually more of a hybrid approach where some non-interrupt-driven code remains in the main loop. Opinions, anyone?</p>
+
+<h3>tri2b or quad4me &ndash; which one? <a name="tri2b_or_quad4me_which_one"></a></h3>
+
+<p>The question of which protocol to use comes down to their <a href="#hardware_requirements">Hardware requirements</a>. The most significant factor is that tri2b uses one fewer communication line than quad4me (3 vs 4). It is also theoretically faster (see <a href="#theoretically_faster">above</a>).</p>
+
+<p>If your hardware supports the <a href="#edge_detection_requirement">edge detection requirement</a> of tri2b, it is probably the better choice over quad4me. But &hellip; the edge detection must be failure-proof; see <a href="#min_high_us">MIN_HIGH_US</a>, below. In the presence of real-world noise, quad4me is likely more reliable.</p>
+
+<p>Additionally, the current example implementation requires edge detection if compiled to be interrupt-driven (see <a href="#triquad_polling_vs_triquad_interrupts">TRIQUAD_POLLING vs TRIQUAD_INTERRUPTS</a>, below), although this may not be strictly necessary (see <a href="#level_based_interrupts">level-based interrupts</a>, below). If edge detection is required for interrupts, tri2b&rsquo;s requirements will (likely) be already met.</p>
+
+<p><a name="the_example_implementations_and_testbed"></a></p>
+
+<h2>The Example Implementations and Testbed </h2>
+
+<p>This repository contains example implementations of tri2b and quad4me, a functional test program for them, porting layers to two different MCUs, and a primitive build environment, all written in C++.</p>
+
+<h3>Using/porting the code <a name="using_porting_the_code"></a></h3>
+
+<p>This repository contains a large amount of code. See <a href="#repository_directories_and_files">Repository directories and files</a>, below. Fortunately, the codebase can be looked at as a hierarchy of layers, with only a few of them required for integration into an real application.</p>
+
+<p>The actual protocol implementation code is in the <a href="#base_implementations"><code>tri2b</code> and <code>quad4me</code></a> directories.</p>
+
+<p>Code to execute the protocols on particular MCUs is in the <a href="#derived_class_methods"><code>ports</code></a> directory tree. Unless by coincidence you are using one of the chips ported here, similar code will need to be written.</p>
+
+<p>The <code>ports</code> code is configured (peripheral registers, GPIO registers, hardware MCU pins, etc) via <a href="#config_files"><code>*_config.hxx</code></a> files in the <code>lpc824</code> and <code>stm32f103</code> example directories. This separation between ported code and configuration files is an implantation choice.</p>
+
+<p>The ported code has dependencies on a large body of utility code (some of which in turn wraps MCU vendor-supplied header files) which are highly idiosyncratic. Feel free to include them in an application (modulo the GPL license &ndash; see <a href="#no_warranty">No Warranty</a>, above) or replace them with supporting code of your own preference.</p>
+
+<p><a href="#the_testbed">The <code>randomtest</code></a> directory contains functional test code for the protocols. It can be used as an example for actual application code.</p>
+
+<p>Finally, the repository contains an again highly idiosyncratic build system &ndash; linker scripts, MCU startup code, Makefiles &ndash; that may be used, modified, or replaced.</p>
+
+<h3>The code itself <a name="the_code_itself"></a></h3>
+
+<p>Everyone will hate the C++ code in this repository. &ldquo;Everyone&rdquo; includes: <a name="everyone_will_hate"></a></p>
+
+<ul>
+<li><a href="#c_coders">C coders</a></li>
+<li><a href="#c_plus_plus_coders">C++ coders</a></li>
+<li><a href="#assembly_coders">Assembly coders</a></li>
+<li><a href="#python_coders">Python coders</a></li>
+<li><a href="#other_coders">Other coders</a></li>
+</ul>
+
+
+<h5>C coders <a name="c_coders"></a></h5>
+
+<p>C coders will hate the code because &hellip; C++</p>
+
+<h5>C++ coders <a name="c_plus_plus_coders"></a></h5>
+
+<p>C++ purists will hate the code because &hellip;</p>
+
+<p>Where should I start?</p>
+
+<ol>
+<li>&ldquo;&lsquo;init&rsquo; methods? INIT METHODS??? That&rsquo;s not RAII!!!&rdquo; <a name="cpp_haters_1"></a></li>
+<li>&ldquo;Why don&rsquo;t you use the singleton pattern?&rdquo; <a name="cpp_haters_2"></a></li>
+<li>&ldquo;Why isn&rsquo;t the code templated on word size?&rdquo; <a name="cpp_haters_3"></a></li>
+<li>&ldquo;Why the crazy duck-typing? Why don&rsquo;t you use virtual inheritance?&rdquo; <a name="cpp_haters_4"></a></li>
+<li>&ldquo;Static polymorphism? Why don&rsquo;t you use the Curiously Recurring Template Pattern?&rdquo; <a name="cpp_haters_5"></a></li>
+<li>&ldquo;Multi-line macros to define methods?  Why aren&rsquo;t you using templates? <a name="cpp_haters_6"></a></li>
+<li>&ldquo;Why aren&rsquo;t you using any design patterns?&rdquo; <a name="cpp_haters_7"></a></li>
+<li>&ldquo;Why aren&rsquo;t you using the STL? Why aren&rsquo;t you using the &lsquo;auto&rsquo; keyword? Why aren&rsquo;t you using range-based &lsquo;for&rsquo; loops?&rdquo; <a name="cpp_haters_8"></a></li>
+</ol>
+
+
+<p>OK, that&rsquo;s enough. I could go on indefinitely.</p>
+
+<p>There are responses to all of these, some of which follow. Not that I expect any of them to lower the level of righteous indignation the code will raise.</p>
+
+<p><a href="#cpp_haters_1">1</a>) Many reasons:</p>
+
+<p>The required ARM pre-main() startup/init code and linker map configuration are complex enough without adding static construction to the mix.</p>
+
+<p>Many of the post-<code>main()</code> <code>init()</code> methods have to be done after application-specific MCU initialization has taken place (peripheral initialization, clock speed, etc.) This initialization does <strong>not</strong> belong in the generic ARM startup <code>init()</code>, so pre-<code>main()</code> construction wouldn&rsquo;t work. In addition, there&rsquo;s what I consider to be a bug in GCC-ARM static construction &ndash; see <a href="#rfiie_arm_gcc_static_construction_with_pointer_member_variables">RFIIE: GCC-ARM static construction with pointer member variables</a>.</p>
+
+<p><a href="#cpp_haters_2">2</a>) No thanks. My understanding is there are always edge cases in the singleton pattern. Plus, more importantly: This is a small embedded application, all statically-allocated memory, no <code>new</code> or <code>malloc()</code>.</p>
+
+<p><a href="#cpp_haters_3">3</a>) Large swaths of the code are implicitly written for a 32-bit CPU. Specifically, a 32-bit *ARM* CPU. Porting to a different word-size machine would be a complete rewrite. Typedef'ing of the variables would be the least of one&rsquo;s worries.</p>
+
+<p><a href="#cpp_haters_4">4</a>) Embedded application. No code space for vtables nor execution time to indirect through them.</p>
+
+<p><a href="#cpp_haters_5">5</a>) The CRTP is not really about static polymorphism. Placing the architecture-specific implementations of the base class methods in the derived class file, when there will only ever be one such compiled into the app binary, is a clean, simple solution.</p>
+
+<p><a href="#cpp_haters_6">6</a>) Template by function name? Is this possible?</p>
+
+<p>Note that the macro names are &ldquo;namespaced&rdquo; by <code>TRI2B</code>/<code>QUAD4ME</code> prefixes so as not to conflict with other <code>#defines</code>. They are also <code>#undef</code>&rsquo;d immediately after use so as to not &ldquo;escape&rdquo; into the code which includes them.</p>
+
+<p>BTW, it&rsquo;s my observation that the more &ldquo;religious&rdquo; a C++ programmer is about not using the preprocessor, the more likely they are to use large macros themselves when they find them necessary to work out a particularly obfuscated piece of generic programming. Your mileage may vary.</p>
+
+<p><a href="#cpp_haters_7">7</a>) Because I&rsquo;m trying to write clear, efficient, maintainable code. A different objective than obtaining a good grade from a 21st century CompSci professor. ;)</p>
+
+<p><a href="#cpp_haters_8">8</a>) I love the STL. No dynamic memory allocation in this embedded application, so it&rsquo;s a non-starter here.</p>
+
+<p>I love/hate the &ldquo;auto&rdquo; keyword. Love it for simplifying declaration of iterators to complex classes. Hate it for making code difficult to maintain when trying to find the type of said iterators. Don&rsquo;t need it, nor range-based loops, in a codebase where all of the &ldquo;for&rdquo; statements iterate via POD variables.</p>
+
+<p>Like I said: Let the hating begin. Feel free rewrite the code to your up-to-date C++ liking (but see <a href="#no_warranty">No Warranty</a>). Also see <a href="#RFIIE_non_request"><strong>Non-</strong> Request</a>, below.</p>
+
+<p>Bjarne Stroustrup himself has said:</p>
+
+<blockquote><p><em>&ldquo;Within C++, there is a much smaller and cleaner language struggling to get out.&rdquo;</em> <a href="http://www.stroustrup.com/bs_faq.html#really-say-that">http://www.stroustrup.com/bs_faq.html#really-say-that</a></p></blockquote>
+
+<p>I&rsquo;m no Bjarne Stroustrup, and maybe I&rsquo;m misinterpreting what he wrote, but for many years my line has been:</p>
+
+<blockquote><p>My favorite programming language in the C family is one of my own design. Fortunately, any decent C++ compiler will compile it without modification. I call my language &ldquo;C+=0.5&rdquo;</p></blockquote>
+
+<h5>Assembly coders <a name="assembly_coders"></a></h5>
+
+<p>Hey, assembly coders! I consider myself one of you &ndash; in spirit if not in practice. Assembly (on a machine far too ancient to mention) was my third computer language after Basic and Fortran (did I mention &ldquo;ancient&rdquo;?) and my first great love.</p>
+
+<p>But I&rsquo;m a backslider. I share the current, common belief that &ldquo;you can&rsquo;t beat the compiler&rdquo; (except in very limited contexts).</p>
+
+<p><a name="no_default_switch_case"></a>
+One of those contexts, at least with the GCC-ARM compiler, is a C/C++ <code>switch/case</code> statement controlled by an <code>enum</code> variable, and which has no <code>default</code> case. When compiled as a jump table (as opposed to chained &ldquo;if-else&rdquo; branches), GCC  always adds a range check on the switch variable before indexing into the jump table.</p>
+
+<p>To illustrate, the following C++ code:</p>
+
+<pre><code>    class SwitchCase {
+      public:
+        enum class CASES {  // need 5 or more cases to force jump table
+          C0 = 0,           // implementation (with -O1 optimization)
+          C1,
+          C2,
+          C3,
+          C4,
+        };
+
+        void switch_case(const CASES c);
+    };
+
+
+    void SwitchCase::switch_case(
+    const SwitchCase::CASES c)
+    {
+        switch (c) {         // need at least 5 cases to compile jump table with -O1
+            case CASES::C0:
+                asm("nop");
+                break;
+
+            case CASES::C1:
+                asm("nop");
+                break;
+
+            case CASES::C2:
+                asm("nop");
+                break;
+
+            case CASES::C3:
+                asm("nop");
+                break;
+
+            case CASES::C4:
+                asm("nop");
+                break;
+        }
+    }
+</code></pre>
+
+<p>compiles and links into:</p>
+
+<pre><code>    void SwitchCase::switch_case(
+    const SwitchCase::CASES c)
+    {
+        switch (c) {         // need at least 5 cases to compile jump table with -O1
+    100000c0:       2904            cmp     r1, #4
+    100000c2:       d804            bhi.n   100000ce &lt;SwitchCase::switch_case(SwitchCase::CASES)+0xe&gt;
+    100000c4:       0089            lsls    r1, r1, #2
+    100000c6:       4b06            ldr     r3, [pc, #24]   ; (100000e0 &lt;SwitchCase::switch_case(SwitchCase::CASES)+0x20&gt;)
+    100000c8:       585b            ldr     r3, [r3, r1]
+    100000ca:       469f            mov     pc, r3
+    /usr/local/example/switch_case.cxx:28
+            case CASES::C0:
+                asm("nop");
+    100000cc:       46c0            nop                     ; (mov r8, r8)
+    /usr/local/example/switch_case.cxx:47
+
+            case CASES::C4:
+                asm("nop");
+                break;
+        }
+    }
+    100000ce:       4770            bx      lr
+    /usr/local/example/switch_case.cxx:32
+                asm("nop");
+    100000d0:       46c0            nop                     ; (mov r8, r8)
+    /usr/local/example/switch_case.cxx:33
+                break;
+    100000d2:       e7fc            b.n     100000ce &lt;SwitchCase::switch_case(SwitchCase::CASES)+0xe&gt;
+    /usr/local/example/switch_case.cxx:36
+                asm("nop");
+    100000d4:       46c0            nop                     ; (mov r8, r8)
+    /usr/local/example/switch_case.cxx:37
+                break;
+    100000d6:       e7fa            b.n     100000ce &lt;SwitchCase::switch_case(SwitchCase::CASES)+0xe&gt;
+    /usr/local/example/switch_case.cxx:40
+                asm("nop");
+    100000d8:       46c0            nop                     ; (mov r8, r8)
+    /usr/local/example/switch_case.cxx:41
+                break;
+    100000da:       e7f8            b.n     100000ce &lt;SwitchCase::switch_case(SwitchCase::CASES)+0xe&gt;
+    /usr/local/example/switch_case.cxx:44
+                asm("nop");
+    100000dc:       46c0            nop                     ; (mov r8, r8)
+    /usr/local/example/switch_case.cxx:47
+    }
+    100000de:       e7f6            b.n     100000ce &lt;SwitchCase::switch_case(SwitchCase::CASES)+0xe&gt;
+    100000e0:       1000018c        .word   0x1000018c
+</code></pre>
+
+<p>with a jump table at 0x1000018c containing:</p>
+
+<pre><code>    switch_case.elf:     file format elf32-littlearm
+
+    Contents of section .rodata:
+     1000018c cc000010 d0000010 d4000010 d8000010  ................
+     1000019c dc000010                             ....            
+
+    Disassembly of section .rodata:
+
+    1000018c &lt;.rodata&gt;:
+    1000018c:       100000cc        .word   0x100000cc
+    10000190:       100000d0        .word   0x100000d0
+    10000194:       100000d4        .word   0x100000d4
+    10000198:       100000d8        .word   0x100000d8
+    1000019c:       100000dc        .word   0x100000dc
+</code></pre>
+
+<p>I&rsquo;m not sure what the C and C++ standards say about this. They may require that a non-handled case with no default skip the entire body of the switch statement.</p>
+
+<p>But knowing there will be no type-punning (casting an arbitrary value not in the enum class as the switch variable), I&rsquo;d code this by hand without the range check (<code>cmp r1, #4</code> and <code>bhi.n 100000ce</code>) before the jump table lookup. Regardless the standards, GCC has so many extension/options that I wish the was one to force this. If there is, I haven&rsquo;t been able to find it (see <a href="#RFIIE_gcc_arm_option_for_switch/case_jump_table_optimization">RFIIE: GCC-ARM option for switch/case jump table optimization</a>).</p>
+
+<h5>Python coders <a name="python_coders"></a></h5>
+
+<p>I love Python. I sprinkle it on my cornflakes at breakfast. I use Python whenever I can, i.e. in non-performance-critical applications. I even believe that most performance-critical applications, at least in non-embedded environments, should be written in Python with C/C++ modules implementing the performance-critical sections.</p>
+
+<p>I&rsquo;m aware of the existence of MicroPython but haven&rsquo;t tried it. My strong suspicion is that it would not &ldquo;play&rdquo; for the minimal hardware environments I&rsquo;ve targeted tri2b and quad4me at. Maybe the size efficiencies gained by implementing the protocols in byte code would offset the size of the interpreter, and maybe the interpreted code execution is almost as fast as native code.</p>
+
+<p>Maybe. As the Missourians say, &ldquo;Show me!&rdquo;. See <a href="#micropython_implementation">RFIIE: MicroPython implementation</a></p>
+
+<h5>Other coders <a name="other_coders"></a></h5>
+
+<p>Java, C#, Ruby, Swift, Visual Basic, the Arduino ecosystem, etc, etc, &hellip;</p>
+
+<p>I have zero knowledge of, and even less interest in, these languages. Feel free to port tri2b/quad4me to any of them (modulo the GPL license &ndash; see <a href="#no_warranty">No Warranty</a>).</p>
+
+<h3>The example build system <a name="the_example_build_system"></a></h3>
+
+<p>This repository contains code plus a (my) primitive build environment for compiling, linking, and testing it. I sincerely doubt that anyone will find the build environment useful &ndash; if you have a potential use for the implementations you will doubtless have your own such environment. This one is included mainly as a &ldquo;sanity check&rdquo; that the complete codebase has been included and is buildable.</p>
+
+<p>The build system is primitive, idiosyncratic, and completely undocumented. I include it here without any intention of supporting it. But see <a href="#rfiie_build_system_enhancements">RFIIE: Build system enhancements</a> in the event that generosity drives you to offer any suggestions for improving it.</p>
+
+<h3>Prerequisites/dependencies  <a name="prerequisites_dependencies"></a></h3>
+
+<p>The code in this repository is meant to be built in a Linux environment. Ports to other platforms may be possible.</p>
+
+<p>GNU configure is a wonderful system which I enjoy using. Unfortunately I do not have the time to learn how to construct &ldquo;configure.in&rdquo; files from scratch.</p>
+
+<p>Fortunately, the repository&rsquo;s dependencies are few. They are:</p>
+
+<p>1) The GNU Arm Embedded Toolchain This repository&rsquo;s code has currently been tested with the &ldquo;gcc-arm-none-eabi-8-2018-q4-major&rdquo; release, <a href="https://launchpad.net/gcc-arm-embedded/+announcements#j15181">https://launchpad.net/gcc-arm-embedded/+announcements#j15181</a>. Ports to other compilers may be possible.</p>
+
+<p>2) GNU make</p>
+
+<p>Included in the repository are the files <code>core_cm0plus.h</code>, <code>core_cmInstr.h</code>, <code>core_cmFunc.h</code>, and <code>system_LPC8xx.h</code> from ARM Limited, <code>stm32f103xb.h</code> from STMicroelectronics, and <code>LPC8xx.h</code> from NXP Semiconductors. My reading of their respective copyright notices is that their inclusion here is allowed. I do not understand the text &ldquo;modified by ARM 02.09.2019&rdquo; in <code>LPC8xx.h</code> which, as of this writing, is still in the future. That&rsquo;s some pro-active bug fixing there. ;)</p>
+
+<p>I will not combine the code into a Debian package, RedHat RPM, or (shudder) Windows Installer executable. It&rsquo;s good thing GitHub is an independent, open-source- and Linux-centric platform. ;)  Note that it also supports downloading the source tree as a ZIP archive.</p>
+
+<h3>Repository directories and files <a name="repository_directories_and_files"></a></h3>
+
+<pre><code>    +-build/
+    +-LICENSE.txt
+    +-README.md
+    | +-Makefile.base
+    | +-Makefile.triquad
+    | +-Makefile.triquad_nxp
+    | +-Makefile.triquad_stm
+    | +-lpc824/
+    | | +-quad4me/
+    | | | +-Makefile
+    | | | +-mcu_config.hxx
+    | | | +-quad4me_config.hxx
+    | | | +-randomtest.gdb
+    | | +-tri2b/
+    | |   +-Makefile
+    | |   +-mcu_config.hxx
+    | |   +-randomtest.gdb
+    | |   +-tri2b_config.hxx
+    | +-stm32f103/
+    |   +-quad4me/
+    |   | +-Makefile
+    |   | +-mcu_config.hxx
+    |   | +-quad4me_config.hxx
+    |   | +-randomtest.gdb
+    |   +-tri2b/
+    |     +-Makefile
+    |     +-mcu_config.hxx
+    |     +-randomtest.gdb
+    |     +-tri2b_config.hxx
+    +-buildtest.sh
+    +-include/
+    | +-arm/
+    | | +-cmsis_gcc.h
+    | | +-core_cm0plus.h
+    | | +-core_cm3.h
+    | | +-core_cmFunc.h
+    | | +-core_cmInstr.h
+    | +-nxp/
+    | | +-LPC82x.h
+    | | +-LPC8xx.h
+    | | +-system_LPC8xx.h
+    | +-stm/
+    | | +-stm32f103xb.h
+    | | +-system_stm32f1xx.h
+    | +-util/
+    |   +-bitops.hxx
+    |   +-lpc8xx.hxx
+    |   +-rank_id.hxx
+    |   +-stm32f10_12357_xx.hxx
+    |   +-sys_tick.hxx
+    |   +-xorshift_random.hxx
+    +-init/
+    | +-lpc8xx_ram_init.c
+    | +-stm32f103_ram_init.c
+    +-ld/
+    | +-lpc824_ram.ld
+    | +-stm32f103_ram.ld
+    +-ports/
+    | +-lpc824/
+    | | +-triquad/
+    | | | +-quad4me.cxx
+    | | | +-quad4me.hxx
+    | | | +-quad4me.inl
+    | | | +-randomtest_port.inl
+    | | | +-tri2b.cxx
+    | | | +-tri2b.hxx
+    | | | +-tri2b.inl
+    | | +-util/
+    | |   +-mcu.cxx
+    | |   +-mcu.hxx
+    | |   +-mrt.cxx
+    | |   +-mrt.hxx
+    | |   +-sct.cxx
+    | |   +-sct.hxx
+    | +-stm32f103/
+    |   +-triquad/
+    |   | +-quad4me.cxx
+    |   | +-quad4me.hxx
+    |   | +-quad4me.inl
+    |   | +-randomtest_port.inl
+    |   | +-tri2b.cxx
+    |   | +-tri2b.hxx
+    |   | +-tri2b.inl
+    |   +-util/
+    |     +-mcu.cxx
+    |     +-mcu.hxx
+    |     +-tim.cxx
+    |     +-tim.hxx
+    |     +-tim_m_s.cxx
+    |     +-tim_m_s.hxx
+    +-quad4me/
+    | +-quad4me_base.cxx
+    | +-quad4me_base.hxx
+    +-randomtest/
+    | +-randomtest.cxx
+    +-tri2b/
+      +-tri2b_base.cxx
+      +-tri2b_base.hxx
+</code></pre>
+
+<p>In addition to this <code>README.md</code>, see comments/documentation in the files themselves.</p>
+
+<h4>randomtest.cxx</h4>
+
+<p>See <a href="#the_testbed">The testbed</a>, below.</p>
+
+<p>Can be compiled to use either tri2b or quad4me protocol.</p>
+
+<p><a name="base_implementations"></a></p>
+
+<h4>triquad_base.[ch]xx, quad4me_base.[ch]xx</h4>
+
+<p>The protocol implementations.</p>
+
+<p>Contain classes Tri2bBase and Quad4meBase, respectively</p>
+
+<p><a name="protocol_method"></a>
+Client application calls protocol object&rsquo;s <code>protocol()</code> method</p>
+
+<p><code>protocol()</code> method returns <code>true</code> when message finished, <code>false</code> (only if configured with <code>TRIQUAD_BIT_BY_BIT</code>, see <a href="#build_variants">Build variants</a>, below) otherwise. Client app calls protocol object&rsquo;s <code>role()</code> method to determine whether message was received (arbitration loss), or pending message was sent (arbitration win).</p>
+
+<p><a name="meta2bits"></a>
+Client needs to implement the <code>meta2bits()</code> method returning the app-specific number of data bits calculated from the value of the preceding metadata bits. The example implementation uses a simple a one-to-one mapping, <code>meta2data(int meta){return meta;}</code>. A real application might map a small number of message types (fewer metadata bits)  to a set of data lengths, <code>meta2data(int meta){return message_lengths[meta];}</code>.</p>
+
+<p>see <a href="#build_variants">Build variants</a>, below</p>
+
+<h4>tri2b.{hxx,inl,cxx} and quad4me.{hxx,inl,cxx} <a name="ported_code"></a></h4>
+
+<p>Ported code</p>
+
+<p><a name="derived_class_methods"></a>
+Duck-typed,  static inheritance/polymorphic concrete classes, derived from <code>Tri2bBase</code> and <code>Quad4meBase</code></p>
+
+<p>Implement architecture-specific versions of methods declared in <code>Tri2bBase</code> and <code>Quad4meBase</code>, including:</p>
+
+<ul>
+<li><code>void reset_delay_start()</code></li>
+<li><code>bool reset_delay_wait()</code></li>
+<li><code>void enable_interrupt()</code></li>
+<li><code>bool alrt()</code></li>
+<li><code>bool ltch()</code></li>
+<li><code>bool cycl()</code> <em>(quad4me only)</em></li>
+<li><code>bool data()</code></li>
+<li><code>void set_alrt()</code></li>
+<li><code>void set_ltch()</code></li>
+<li><code>void set_cycl()</code> <em>(quad4me only)</em></li>
+<li><code>void set_data()</code></li>
+<li><code>void clr_alrt()</code></li>
+<li><code>void clr_ltch()</code></li>
+<li><code>void clr_cycl()</code> <em>(quad4me only)</em></li>
+<li><code>void clr_data()</code></li>
+<li><code>void disble_alrt_fall()</code> <em>(only if</em> <code>TRIQUAD_INTERRUPTS</code> <em>enabled, see <a href="#triquad_polling_vs_triquad_interrupts">TRIQUAD_POLLING vs TRIQUAD_INTERRUPTS</a>, below)</em></li>
+<li><code>void enable_alrt_fall()</code> <em>(only if</em> <code>TRIQUAD_INTERRUPTS</code> <em>enabled, see <a href="#triquad_polling_vs_triquad_interrupts">TRIQUAD_POLLING vs TRIQUAD_INTERRUPTS</a>, below)</em></li>
+</ul>
+
+
+<p>Also declare and define other architecture-specific methods <strong>not</strong> in Tri2bBase and Quad4meBase</p>
+
+<p><a name="config_files"></a></p>
+
+<h4>tri2b_config.hxx and quad4me_config.hxx</h4>
+
+<p>Porting information</p>
+
+<p>Describe hardware environment (GPIO ports, timers, etc.)</p>
+
+<h4>mcu_config.hxx</h4>
+
+<p>CPU and peripheral configuration (CPU speed, peripheral initialization)</p>
+
+<h4>rank_id.hxx</h4>
+
+<p>Least-recently-used reshuffling of arbitration priority-to-node ID mapping</p>
+
+<p>See file for algorithm description.</p>
+
+<h4>bitops.hxx</h4>
+
+<p>Convenience routines</p>
+
+<p>Wrappers, replacements, and/or supplements to CPU bit instructions</p>
+
+<h4>xorshift_random.hxx</h4>
+
+<p>Pseudo-random number generator</p>
+
+<h4>LPC8xx.h and stm32f10_12357_xx.hxx</h4>
+
+<p>Wrappers and convenience/usability extensions to NXP- and STM-provided include files</p>
+
+<p>NXP&rsquo;s <code>LPC8xx.h</code> defines peripheral memory map locations and register layouts, but no bitfields within the registers.</p>
+
+<p>STM&rsquo;s <code>stm32f103xb.h</code> does define bitfields, but some very poorly. For example <code>GPIO_CRL_MODE1_0</code> and <code>GPIO_CRL_MODE1_1</code> are simply bits which client code must combine appropriately. The <code>stm32f10_12357_xx.hxx</code> wrapper declares meaningful symbolic constants such as <code>gpio::crl::CONF_OUTPUT_PUSH_PULL</code>, <code>gpio::crl::CONF_OUTPUT_OPEN_DRAIN</code>, etc.</p>
+
+<h4>mcu.[ch]xx</h4>
+
+<p>Architecture-specific MCU CPU and peripheral initialization, driven by <code>mcu_config.hxx</code> files</p>
+
+<h4>mrt.[ch]xx, sct.[ch]xx, tim.[ch]xx, tim_m_s.[ch]xx</h4>
+
+<p>Wrapper classes for hardware peripherals (timers)</p>
+
+<p><code>TimMS</code> class implements two 16-bit timers, chained in series</p>
+
+<h4>lpc824_ram.{init,ld} and stm32f103_ram.{init,ld}</h4>
+
+<p>Simple/primitive MCU (pre-main) init scripts and linker memory map configuration files. See <a href="#rfiie_build_system_enhancements">RFIIE: Build system enhancements</a>.</p>
+
+<h4>Makefile.base</h4>
+
+<p>Highly idiosyncratic compilation recipes</p>
+
+<h4>Makefile.triquad</h4>
+
+<p>Settings. See <a href="#build_variants">Build variants</a>, below. Overridable by commandline arguments.</p>
+
+<h4>Makefile.triquad_nxp and Makefile.triquad_stm</h4>
+
+<p>Default architecture-specific settings. Overridable by commandline arguments.</p>
+
+<h4>randomtest.gdb</h4>
+
+<p>GDB functions, for debugging and statistics reporting</p>
+
+<p>See <a href="#gdb_test_environment">GDB test environment</a>, below.</p>
+
+<h3>The testbed <a name="the_testbed"></a></h3>
+
+<p>The application, code contained in <code>randomtest.cxx</code>, sends messages of random size (number of data bits) and receives same. It keeps and array of pseudo-random number generators, one for each node in the system, and steps not only its own PNRG but the other nodes' as well, so know what data to expect in each received message. Halts on any error.</p>
+
+<p>Gathers performance statistics; see <a href="#gdb_test_environment">GDB test environment</a>, below.</p>
+
+<h3>Build variants <a name="build_variants"></a></h3>
+
+<p>The example implementation and testbed are highly configurable at build time through a large, multidimensional matrix of options:</p>
+
+<pre><code>    TRIQUAD_TRI2B        |   TRIQUAD_QUAD4ME
+    TRIQUAD_BIT_BY_BIT   |   TRIQUAD_WHOLE_MESSAGE
+    TRIQUAD_POLLING      |   TRIQUAD_INTERRUPTS 
+    DYNAMIC_RANK         |   (not) DYNAMIC_RANK
+    TRIQUAD_STATS        |   (no) TRIQUAD_STATS
+    TRIQUAD_PROGRESS     |   (no) TRIQUAD_PROGRESS
+    RANDOM_DELAY_US &gt; 0  |   RANDOM_DELAY_US == 0
+    BUSY_MASK       &gt; 0  |   BUSY_MASK       == 0
+    DATA_WAIT_US    &gt; 0  |   DATA_WAIT_US    == 0
+</code></pre>
+
+<p>That&rsquo;s <code>2^9 == 512</code> combinations. Only a small subset have been tested, and even fewer of those extensively.</p>
+
+<p>Probably the most useful (and most tested) are:</p>
+
+<pre><code>         (TRIQUAD_TRI2B   or TRIQUAD_QUAD4ME   )
+    with (TRIQUAD_POLLING or TRIQUAD_INTERRUPTS)
+    with  DYNAMIC_RANK
+    and   TRIQUAD_STATS
+    and   RANDOM_DELAY_US &gt; 0
+    and   BUSY_MASK       &gt; 0
+</code></pre>
+
+<p>That&rsquo;s still four full build-plus-test sessions (multiplied by many debugging iterations). I welcome any reports of success or failure with other configurations.</p>
+
+<h4>Protocol variants <a name="protocol_variants"></a></h4>
+
+<h5>TRIQUAD_TRI2B vs TRIQUAD_QUAD4ME</h5>
+
+<p>Which of the two protocols to build and link.</p>
+
+<h5>TRIQUAD_BIT_BY_BIT vs TRIQUAD_WHOLE_MESSAGE <a name="triquad_bit_by_bit_vs_triquad_whole_message"></a></h5>
+
+<p>Whether <code>protocol()</code> method returns <code>false</code> if waiting for bit and true when message finished, or only when message finished (returning <code>true</code>).</p>
+
+<p>See <a href="#protocol_return_after_each_bit">protocol() return after each bit, whether waiting or not</a>, below.</p>
+
+<h5>TRIQUAD_POLLING vs TRIQUAD_INTERRUPTS <a name="triquad_polling_vs_triquad_interrupts"></a></h5>
+
+<p>Polled or interrupt driven invocation of protocol object&rsquo;s <code>protocol()</code> method. See <a href="#to_interrupt_or_not_to_interrupt">To interrupt or not to interrupt</a>, above.</p>
+
+<h5>DATA_WAIT_US<a name="data_wait_us"></a></h5>
+
+<p>Microseconds to wait after setting data line high (if doesn&rsquo;t go high because in arbitration phase and other node(s) holding low). See <a href="#rise_time">Rise time</a>, above.</p>
+
+<h5>MIN_HIGH_US<a name="min_high_us"></a></h5>
+
+<p>Minimum time (microseconds) for ALRT or LTCH line to be high (tri2b only).</p>
+
+<h5>TRIQUAD_NUM_NODES and TRIQUAD_ARBT_BITS</h5>
+
+<p>Basic configuration.</p>
+
+<h5>TRIQUAD_ID</h5>
+
+<p>Node ID and initial or permanent arbitration priority, depending on whether <a href="#dynamic_rank">DYNAMIC_RANK</a> is enabled.</p>
+
+<h5>DYNAMIC_RANK, MIN_RANK, MAX_RANK <a name="dynamic_rank"></a></h5>
+
+<p>Enable or disable, and set range of node IDs to dynamically rank.</p>
+
+<p>See file rank_id.hxx for algorithm description.</p>
+
+<h5>TRIQUAD_STATS</h5>
+
+<p>Enable or disable recording of arbitration win/loss/etc.</p>
+
+<p>If enabled, <code>scor()</code> method returns one of:</p>
+
+<pre><code>    enum class Scor {
+        PEND = 0,
+        RCVR,
+        WNNR,
+        NZWN,  // non-zero winner (win with _rank != 0)
+        LOSR,
+    };
+</code></pre>
+
+<h4>Testbed (randomtest.cxx) variants <a name="testbed_variants"></a></h4>
+
+<h5>TRIQUAD_PROGRESS</h5>
+
+<p><em>Untested variant.</em> Short-circuit randomtest main loop if TRIQUAD_BIT_BY_BIT and no change in protocol <em>State</em> after call to <code>protocol()</code></p>
+
+<h5>RANDOM_DELAY_US</h5>
+
+<p>Minimum number of microseconds between attempts to send message.</p>
+
+<h5>BUSY_MASK</h5>
+
+<p>Mask LSBs of PRNG for length of busy loop to simulate a client being unresponsive to protocol participation.</p>
+
+<h5>REPORT_AT</h5>
+
+<p>Hit GDB statistics dprintf breakpoint every <code>(REPORT_AT + 1)</code> messages
+Must be <code>(2^n)-1</code> value.</p>
+
+<p>See <a href="#gdb_test_environment">GDB test environment</a>, below.</p>
+
+<h5>RESET_AT</h5>
+
+<p>NOT IMPLEMENTED</p>
+
+<p>Reset communication protocol hardware lines every <code>(REPORT_AT + 1)</code> messages. Must be <code>(2^n)-1</code> value.</p>
+
+<p>See <a href="#one_line_held_low_at_idle">One line held low at idle</a>, above.</p>
+
+<h4>Debug variants <a name="debug_variants"></a></h4>
+
+<h5>STATE_STRINGS</h5>
+
+<p>Include <code>char*</code> strings matching <code>State</code>, <code>Phase</code>, and <code>Role</code> enums for GDB dprints.</p>
+
+<p>See <a href="#gdb_test_environment">GDB test environment</a>, below.</p>
+
+<h3>GDB test environment <a name="gdb_test_environment"></a></h3>
+
+<p>Remotely debugging an embedded system using GDB running on a host development computer is a dream come true. It performs executable downloading (to flash or RAM), and code debugging (breakpoints, variable/memory/data/object examination, manually setting variables).</p>
+
+<p>One particularly useful feature is the dprintf command. This enables impact- and footprint-less &ldquo;printing&rdquo; of information in the embedded app, without the need for printf, RS-232, USB, etc. code in the target app. It&rsquo;s a great (and recently added?) addition/replacement for using the GDB a &ldquo;commands&rdquo; directive ending with &ldquo;continue&rdquo;.</p>
+
+<p>The randomtest.gdb script files contain several useful GDB functions for easily-readable formatted dumps of tri2b/quad4me objects, and several &ldquo;dprintf&rdquo; breakpoints for tracing message sends/receives and/or protocol progress. (Admittedly these vastly slow down execution of the embedded code and thus affect timing of the communication line transitions.)</p>
+
+<p>In addition to the dprints, the <code>results</code> function collates and presents data collected about the protocol&rsquo;s performance. This is not implemented as a dprintf, in order to allow shelling out the host system&rsquo;s <code>data</code> command to track wall-clock time. It is also useful for calling manually in an interactive GDB session after halting the embedded code.</p>
+
+<p>Note also that randomtest.cxx has several variables named &ldquo;<code>xxx_K</code>&rdquo; which are initialized by compile-time constants (set via the Makefiles) but are not const themselves in order to allow runtime changes in GDB (typically before the start of a test).</p>
+
+<p>In a production system, each node&rsquo;s binary code would be compiled (or likely patched) with the node&rsquo;s fixed ID, and then loaded into MCU flash memory. For development purposes, I load the a single, per-architecture build of the code into RAM, and dynamically set the node IDs in GDB. Something like:</p>
+
+<pre><code>    $ gdb randomtest.elf
+    (gdb) source randomtest.gdb
+    (gdb) set var randomtest::triquad_random._NODE_ID = 2
+    (gdb) set var randomtest::triquad_random._rank    = 2
+    (gdb) enable 2
+    (gdb) date_continue
+</code></pre>
+
+<p>The above, again admittedly,  leaves out a fair amount of additional infrastructure (<code>openocd</code> scripts for SWD hardware debugging connections and GDB wrappers to connect to <code>openocd</code>) that is completely specific to my hardware development environment. I am not including them here because they&rsquo;re outside the scope of this repository. See the &ldquo;sanity check&rdquo; comment in <a href="#the_example_build_system">the example build system</a>, above.</p>
+
+<h3>Example implementation enhancements/improvements <a name="enhancements_improvements"></a></h3>
+
+<h5>Arbitrary-length messages (data longer than 32 bits) <a name="arbitrary_length_messages"></a></h5>
+
+<p>The system I designed tri2b and quad4me for only required 32 bits of data per message at most. Additionally, I wanted to avoid the overhead of shifting incoming bits into multiple bytes or words.</p>
+
+<p>The protocols could be easily extended to handle messages of arbitrary length data.</p>
+
+<h5>Level-based interrupts <a name="level_based_interrupts"></a></h5>
+
+<p>The interrupt-driven versions of current example implementation trigger on falling edges of the ALRT line. This largely makes moot the quad4me protocol (if interrupt-driven), the main advantage of which over tri2b is that it is purely level-based (see <a href="#to_interrupt_or_not_to_interrupt">To interrupt or not to interrupt</a>, above).</p>
+
+<p>Some ARM MCUs (NXP LPC824, for example) are documented to have optional level-based interrupts. The semantics of these are inherently confusing (does the interrupt fire continuously if the input stays at the configured-to-interrupt level?) and I was not able to easily get it to work in my codebase. Regardless, it may be an interesting option to explore.</p>
+
+<h5>protocol() always return after each bit <a name="protocol_return_after_each_bit"></a></h5>
+
+<p>The example implementation&rsquo;s <a href="#triquad_bit_by_bit_vs_triquad_whole_message">TRIQUAD_BIT_BY_BIT</a> variant of the <code>protocol()</code> method configures it to return after each bit has been sent or received. It does not, however, return while waiting for the bits (protocol handshakes, see <a href="#tri2b_protocol">tri2b protocol</a> and <a href="#quad4me_protocol">quad4me protocol</a>, above).</p>
+
+<p>There could be a third option to TRIQUAD_BIT_BY_BIT vs TRIQUAD_WHOLE_MESSAGE <a name="triquad_bit_by_bit_vs_triquad_whole_message"></a> which makes <code>protocol()</code> return while waiting. As per <a href="#to_interrupt_or_not_to_interrupt">discussion</a> above, this would only be of value if a node&rsquo;s CPU performance was much faster than that of the other nodes in the system plus the hardware <a href="#rise_time">rise time</a> of the communication lines, and it could perform a useful amount work during the brief waits.</p>
+
+<h5>Inline protocol() method <a name="inline_protocol_method"></a></h5>
+
+<p>If the <code>protocol()</code> method is called from only one place in the client application code, it might make sense to force it to be compiled as an inline function despite its very significant size. This would eliminate one function call and return, again likely only of value if doing polling with <a href="#triquad_bit_by_bit_vs_triquad_whole_message">TRIQUAD_BIT_BY_BIT</a> and/or the <code>protocol()</code> method always returned after each bit as per <a href="#protocol_return_after_each_bit">above</a>.</p>
+
+<h5>Dynamic MCU clock speed <a name="dynamic_mcu_clock_speed"></a></h5>
+
+<p>The protocols' performance is tied to MCU clock speed. (Bit-banging sucks). In a system where communications are idle most of the time &ndash; but latency and/or communication speed are still prime issues &ndash; it might be worthwhile to increase the MCU clock speed when entering the <code>protocol()</code> method and return it to its original value on message completion.</p>
+
+<h5>Oversample lines in quad4me <a name="oversample_lines_in_quad4me"></a></h5>
+
+<p>An earlier revision of the <code>Quad4me</code> derived class implementations had a debug option to repeatedly sample the state of the communications lines in the <code>alrt()</code>, <code>ltch()</code>, <code>cycl()</code>, and <code>data()</code> methods. This could be restored to improve noise immunity if necessary.</p>
+
+<p><a name="RFIIE"></a></p>
+
+<h2>Requests For Improvements, Information, and Enhancements (RFIIE)</h2>
+
+<h4>Generic Request <a name="RFIIE_generic_request"></a></h4>
+
+<p>I am interested in any and all improvements to the capabilities, execution speed, and/or compiled code size of this repository&rsquo;s source code as long as they do not significantly obfuscate the code&rsquo;s readability and maintainability.</p>
+
+<h4><strong>Non-</strong> Request <a name="RFIIE_non_request"></a></h4>
+
+<p>I am <strong>not</strong> interested in gratuitous rewrites of the implementation code, in particular any modifications or additions to fit it into some pre-conceived software methodology such as design patterns, new features/syntax of C++14,17,20,  doxygen-formatted comments, etc. See <a href="#c_plus_plus_coders">C++ coders</a>, above. Please feel free to fork this repository create a version more to your liking (but respect the <a href="#no_warranty">GPL</a>).</p>
+
+<p>I am likewise not interested in any modifications to base the code, or make it dependent, on other-party libraries such as opencm3 or, in particular,  STM HAL. If there are any such pull requests that are sufficiently interesting (i.e. contain actual improvements as per <a href="#RFIIE_generic_request">Generic Request</a>, above)) I will decipher and backport them to this codebase. Please consider making my life easier and submit a version with a minimum subset of modifications to the existing code. Thank you.</p>
+
+<p><a name="RFIIE_code_formatting"></a>
+And lay off the indentation and alignment. Quick: In which version is it easier to find the missing &ldquo;,&rdquo; syntax error?</p>
+
+<pre><code>    ezi2c_random.init(i2c_config::I2C           ,
+                      i2c_config::CLCK_SWM_REG  ,
+                      i2c_config::DATA_SWM_REG  ,
+                      i2c_config::CLOCK_DIVISOR 
+                      i2c_config::HGH_CLOCK_BITS,
+                      i2c_config::LOW_CLOCK_BITS,
+                      i2c_config::CLCK_IOCON_REG,
+                      i2c_config::DATA_IOCON_REG,
+                      i2c_config::PIN_TYPE       );
+</code></pre>
+
+<p>or</p>
+
+<pre><code>    ezi2c_random.init(i2c_config::I2C, i2c_config::CLCK_SWM_REG, i2c_config::DATA_SWM_REG, i2c_config::CLOCK_DIVISOR i2c_config::HGH_CLOCK_BITS, i2c_config::LOW_CLOCK_BITS, i2c_config::CLCK_IOCON_REG, i2c_config::DATA_IOCON_REG, i2c_config::PIN_TYPE);
+</code></pre>
+
+<p>I rest my case. A friend of mine brilliantly calls this &ldquo;visual grep&rdquo;.</p>
+
+<h4>Specific Requests <a name="specific_requests"></a></h4>
+
+<h5>RFIIE: Low-end ARM MCU with working multi-master I2C peripheral and library <a name="RFIIE_low_end_arm_mcu_with_working_multi_master_i2c_peripheral_and_library"></a></h5>
+
+<p>A low-end (20-32 pins, TSSOP-20 QFN-33, 8-16 KB RAM, 16-32 KB flash, c. $2 USD in single-piece quantities) ARM chip with a working multi-master I2C peripheral. See <a href="#required_i2c_features">Required I2C Features</a>, above. Register-level example code  (no other-party libraries required) if at all possible.</p>
+
+<p>Point me to such a system and I&rsquo;ll drop all this tri2b and quad4me nonsense.</p>
+
+<h5>RFIIE: Low-End ARM MCU with working inter-operable CAN bus (and library) <a name="RFIIE_low_end_arm_mcu_with_working_inter_operable_can_bus_and_library"></a></h5>
+
+<p>Similar requirements to <a href="#RFIIE_low_end_arm_mcu_with_working_multi_master_i2c_peripheral_and_library">RFIIE: Low-End ARM MCU With Working Multi-master I2C peripheral and library</a>, above.</p>
+
+<h5>RFIIE: Alternative, existing protocol/algorithm  <a name="RFIIE_alternative_existing_protocol_algorithm"></a></h5>
+
+<p>An existing, published, open-source protocol/algorithm that implements the <a href="#features">features</a>, above. I&rsquo;ve searched and haven&rsquo;t found one besides I2C, SPI, CAN bus, RS-485, and others that don&rsquo;t. Hardware support would be a significant plus.</p>
+
+<h5>RFIIE: Fewer lines  <a name="RFIIE_fewer_lines"></a></h5>
+
+<p>A way to provide the capabilities of tri2b with fewer than three hardware lines, or quad4me with fewer than four</p>
+
+<h5>RFIIE: A three (or fewer) line level-based protocol  <a name="RFIIE_three_or_fewer_line_level_based_protocol"></a></h5>
+
+<p>A level-based design similar to the edge-based tri2b that runs on two (or one) handshake lines (total of three or two including data line).</p>
+
+<h5>RFIIE: No line low at idle  <a name="RFIIE_no_line_low_at_idle"></a></h5>
+
+<p>A way to provide the capabilities of tri2b or quad4me without requiring one or more hardware lines to be held low (dissipating pull-up resistor power) at idle.</p>
+
+<h5>RFIIE: Hardware support  <a name="RFIIE_hardware_support"></a></h5>
+
+<p>A hardware-supported implementation of tri2b or quad4me on existing MCU hardware, such as NXP&rsquo;s &ldquo;Pattern match engine&rdquo; (NXP Semiconductors <em>UM10800, LPC82x User manual, Rev. 1.2, 5 October 2016</em>, p.133, <em>10.5.2 Pattern match engine</em>).</p>
+
+<p>Note that a full hardware implementation, either on a standalone programmable-logic chip or as a built-in peripheral to a new MCU is unlikely to be of value as one might as well implement working I2C multi-master capability (the timing/performance requirements of I2C being easy to match at logic speeds, and because the hardware would be 100% devoted to the task &ndash; see <a href="#why_not_bit_bang_i2c">Why Not Bit-Bang  I2C?</a>, above).</p>
+
+<p>But alternately, if I2C is subject to the same glitch failures as tri2b, a hardware implementation of quad4me might be more reliable and therefor worthwhile. See <a href="#tri2b_or_quad4me_which_one">&ldquo;tri2b or quad4me &ndash; which one?'</a>, above.</p>
+
+<h5>RFIIE: Hardware swapover  <a name="rfiie_hardware_swapover"></a></h5>
+
+<p>A working implementation in which tri2b or quad4me is used for arbitration, followed by some hardware-implemented protocol such as SPI/USART/I2C for metadata and data, and a final swap back to GPIO functionality for the next tri2b/quad4me message/arbitration. See <a href="#the_failed_promise_of_hardware_swapover">The failed promise of hardware swapover</a>, above.</p>
+
+<h5>RFIIE: tri2b/quad4me ports  <a name="tri2b_quad4me_ports"></a></h5>
+
+<p>Additional, chip-specific derived classes porting Tri2bBase and Quad4meBase to specific ARM MCUs. See <a href="#ported_code">Ported code</a>, above.</p>
+
+<p>I myself will likely be adding one specific variant of the STM32F7 line  in the near future.</p>
+
+<h5>RFIIE: GPIO drive capability  <a name="RFIIE_gpio_drive_capability"></a></h5>
+
+<p>Any pointers on how many nodes can be put on a single tri2b/quad4me multi-line bus, and how physically long that bus can be? This in light of the drive capabilities of MCU GPIO ports.</p>
+
+<p>EE&rsquo;s are like cops: They&rsquo;re never around when you need one. ;)</p>
+
+<h5>RFIIE: Active pullup  <a name="RFIIE_active_pullup"></a></h5>
+
+<p>I have seen circuit designs which attempt to get around the trade-off inherent with pull-up resistors for open-drain lines: The lower the resistance the faster the rise time on the line but at the cost of more wasted power dissipation. See <a href="#rise_time">Rise Time</a>, above. The circuits seem to work by detecting the voltage level on the line: When the line is near but not at zero volts the circuit switches in a parallel low-value resistor tied to Vdd to improve rise time, and then switches it back out when the voltage approaches Vdd leaving a higher-valued resistor to hold the line high without excess dissipation.</p>
+
+<p>Are there any off-the-shelf chips that implement this, likely with additional features and capabilities (multiple pull-up speeds, latchup protection, etc)? Note that this solution is preferable to I2C buffer/driver chips, as those require a chip/channel for each chip/pin&rsquo;s connection to a communication line compared to one chip/circuit per line for active pullups.</p>
+
+<h5>RFIIE: GCC-ARM option for switch/case jump table optimization <a name="RFIIE_gcc_arm_option_for_switch/case_jump_table_optimization"></a></h5>
+
+<p>A GCC-ARM option to eliminate the range check before jump table in a jump-table-implemented, default-less switch/case statement using an enum variable. See <a href="#no_default_switch_case">above</a>. Adding the <code>-Wswitch-enum</code> flag doesn&rsquo;t help. I have only found a request dated 2004 for this on the GCC sites, with no followups afterwards.</p>
+
+<h5>RFIIE: MicroPython implementation <a name="micropython_implementation"></a></h5>
+
+<p>Implementations of tri2b and quad4me in MicroPython, without significant impact in code size (including addition of the interpreter) and execution speed.</p>
+
+<h5>RFIIE: GCC-ARM static construction with pointer member variables <a name="rfiie_arm_gcc_static_construction_with_pointer_member_variables"></a></h5>
+
+<p>GCC-ARM (at least through version 8) does not place static objects with <code>constexpr</code> constructors with pointer arguments/members into the &ldquo;D&rdquo; initialized data segment, even if those pointers are statically-known at compile time and the member variables they initialize are const. Instead, it places them, uninitialized, into the &ldquo;B&rdquo; section and generates constructor code and calls to same.</p>
+
+<pre><code>    $ cat constexpr_constructor.cxx
+    #include &lt;stdint.h&gt;
+
+    typedef struct {
+        volatile uint32_t register1;
+        volatile uint32_t register2;
+    } RegistersTypedef;
+
+    #define R (RegistersTypedef*)0x12345678
+
+    class C {
+      public:
+        constexpr C(
+        RegistersTypedef* const initializer)
+        : initialized(initializer)
+        {}
+      protected:
+        RegistersTypedef* const initialized;
+    };
+
+    C c(const_cast&lt;RegistersTypedef*const&gt;(R));
+
+    int main()
+    {
+    }
+</code></pre>
+
+<p>GCC-ARM (at least through GCC-ARM 8) compiles and links this as:</p>
+
+<pre><code>    $ nm -C constexpr_constructor.o
+    00000074 t _GLOBAL__sub_I_c
+    0000001c t __static_initialization_and_destruction_0(int, int)
+    00000000 W C::C(RegistersTypedef*)
+    00000000 W C::C(RegistersTypedef*)
+    00000000 n C::C(RegistersTypedef*)
+    00000000 B c
+    00000000 T main
+</code></pre>
+
+<p>GCC 4.8.5 on Intel Linux gives:</p>
+
+<pre><code>    $ nm -C constexpr_constructor.o
+    0000000000000000 D c
+    0000000000000000 T main
+</code></pre>
+
+<p>Is there any way to force GCC-ARM to do the same?</p>
+
+<h5>RFIIE: GCC-ARM -fshort-enums and ARM byte vs word access speed <a name="RFIIE_GCC-ARM_fshort_enums_and_ARM_byte_vs_word_access_speed"></a></h5>
+
+<p>ARM documentation for e.g. the M0+ and M3 cores seems to indicate that there is no difference in memory access speed (load/store RISC architecture) between 8-bit bytes and 32-bit words. GCC-ARM&rsquo;s documentation for the <code>-fshort-enums</code> flag (enum storage is the minimum size that will contain all the enum values) seems to say otherwise, and in fact I have not been able to get <code>-fshort-enums</code> to take effect if <code>-O1</code> (or higher?) optimization is in place, as shown by the following compile-time test:</p>
+
+<pre><code>    enum class State {
+        READ = 0,
+        WRIT = 1,
+        NEXT = 2,
+    };
+
+    static_assert(sizeof(State) == 1, "Compile with -fshort-enums")
+</code></pre>
+
+<h5>RFIIE: Build system enhancements <a name="rfiie_build_system_enhancements"></a></h5>
+
+<p>I would welcome any improvements, fixes, pointing out of errors, etc. to my primitive build system &hellip; as long as they are not major rewrites or replacements for it. Suggestions to use OpenCM3, ARM DS-5, Keil MDK, Atollic TrueSTUDIO, IAR Workbench, etc. don&rsquo;t count.</p>
