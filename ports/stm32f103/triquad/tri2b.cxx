@@ -7,7 +7,7 @@
 #include <mcu.hxx>
 #include <tim.hxx>
 
-#if TRIQUAD_MIN_HIGH_US == 0
+#if TRIQUAD_MIN_HIGH_US > 0 || TRIQUAD_DATA_WAIT_US > 0
 #include <sys_tick.hxx>
 #endif
 
@@ -18,10 +18,11 @@
 
 
 
+namespace {
+    stm32f10_12357_xx::TIM      reset_timer;
+}
+
 using namespace baresil::stm32f10_12357_xx;
-
-stm32f10_12357_xx::TIM      reset_timer;
-
 
 
 
@@ -99,7 +100,7 @@ void Tri2b::init()
                                            ::mcu
                                            ::milliseconds_to_clocks(1)));
 
-#if TRIQUAD_MIN_HIGH_US > 0
+#if TRIQUAD_MIN_HIGH_US > 0 || TRIQUAD_DATA_WAIT_US > 0
     // not really one shot, will run continuously
     arm::SysTick::one_shot(arm::SysTick::MAX_COUNTS);
 #endif
@@ -173,32 +174,34 @@ void Tri2bBase::enable_interrupt() {
 
 
 
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
 void Tri2bBase::set_data() {
     tri2b_config::GPIO->BSRR = tri2b_config::DATA_GPIO_BIT;
 
-    static const uint32_t
-      COUNTS
-    =     baresil
-        ::stm32f10_12357_xx
-        ::mcu::microseconds_to_clocks(TRIQUAD_DATA_WAIT_US)
-      / 10;  // estimate of clocks/loop, -O1
+    uint32_t    systick_start = arm::SysTick::count();
 
     if (_phase == Phase::IDLE || _phase == Phase::ARBT) {
-        uint32_t    count = COUNTS;
-
+#ifdef TRIQUAD_STATS
+        uint32_t    prev_data_waits = _data_waits;
+#endif
         // need timout: other node(s) might be pulling line down
-        for ( ; !data() && count ; --count) {
+        while (   !data()
+               &&   arm::SysTick::elapsed(systick_start)
+                  < baresil::stm32f10_12357_xx::mcu::microseconds_to_clocks(
+                                                     TRIQUAD_DATA_WAIT_US   )) {
+
 #ifdef TRIQUAD_STATS
             ++_data_waits;
 #endif
             asm("nop");
         }
 
-        if (!count) {
-              _data_waits -= COUNTS;     // separate waits from timeouts
-            ++_data_timeouts      ;
+#ifdef TRIQUAD_STATS
+        if (!data()) {
+              _data_waits = prev_data_waits;     // separate waits from timeouts
+            ++_data_timeouts               ;
         }
+#endif
     }
     else if (!_prev_data)  // only if was previously set low
         while (!data()) {
@@ -210,7 +213,7 @@ void Tri2bBase::set_data() {
 
     _prev_data = 1;  // always do, for last bit of ARBT to first of META
 }
-#endif  // #if TRIQUAD_DATA_WAIT_US != 0
+#endif  // #if TRIQUAD_DATA_WAIT_US > 0
 
 
 

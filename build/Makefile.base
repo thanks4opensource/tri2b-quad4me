@@ -15,7 +15,7 @@ $(error set GCC_ARM_ROOT environment variable)
 endif
 
 ifndef DEVEL_ROOT
-$(error set DEVEL_ROOT environment variable -- typically parent of Makefile.base's director)
+$(error set DEVEL_ROOT environment variable -- typically parent of Makefile.base's directory)
 endif
 
 export PATH := $(GCC_ARM_ROOT)/bin:$(PATH)

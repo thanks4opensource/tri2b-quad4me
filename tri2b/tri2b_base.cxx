@@ -265,7 +265,7 @@ bool Tri2bBase::protocol()
 
                     // reset to known condition for wait-for-finish loop below
                     // must be before set_cycl(), otherwise race condition
-                    // if TRIQUAD_DATA_WAIT_US != 0 and set_data() is waiting
+                    // if TRIQUAD_DATA_WAIT_US > 0 and set_data() is waiting
                     // for actual high on line but another node get ahead
                     // into setting arbitration bit low IDLE/ARBT
                     set_data();

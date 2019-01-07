@@ -30,7 +30,7 @@ QUAD4ME_SET_CLR(set, data, quad4me_config::DATA_GPIO_NDX, 1)
 QUAD4ME_SET_CLR(clr, alrt, quad4me_config::ALRT_GPIO_NDX, 0)
 QUAD4ME_SET_CLR(clr, ltch, quad4me_config::LTCH_GPIO_NDX, 0)
 QUAD4ME_SET_CLR(clr, cycl, quad4me_config::CYCL_GPIO_NDX, 0)
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
 void Quad4meBase::clr_data() {
         LPC_GPIO_PORT->B0[quad4me_config::DATA_GPIO_NDX] = 0;
         _prev_data = 0;

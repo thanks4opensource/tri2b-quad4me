@@ -97,7 +97,7 @@ class Quad4meBase {
         // numerically lower == higher priority
         _rank            (node_id    ),  // see rank(), below
 #endif
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
         _prev_data       (0          ),  // only if data 0->1 change
 #endif
         _pendmet         (0          ),
@@ -202,7 +202,7 @@ class Quad4meBase {
 #endif
                     clr_data();
 
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
            void     set_data();
 #endif
 
@@ -236,7 +236,7 @@ class Quad4meBase {
 #ifdef DYNAMIC_RANK
           uint8_t   _rank            ;
 #endif
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
           uint8_t   _prev_data       ;
 #endif
           uint8_t   _pendmet         ;

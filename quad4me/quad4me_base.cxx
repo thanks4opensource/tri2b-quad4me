@@ -277,7 +277,7 @@ bool Quad4meBase::protocol()
 
                     // reset to known condition for wait-for-finish loop below
                     // must be before set_cycl(), otherwise race condition
-                    // if TRIQUAD_DATA_WAIT_US != 0 and set_data() is waiting
+                    // if TRIQUAD_DATA_WAIT_US > 0 and set_data() is waiting
                     // for actual high on line but another node goes ahead
                     // into setting arbitration bit low IDLE/ARBT
                     set_data();

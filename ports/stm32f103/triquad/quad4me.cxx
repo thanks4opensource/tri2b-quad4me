@@ -7,6 +7,10 @@
 #include <mcu.hxx>
 #include <tim.hxx>
 
+#if TRIQUAD_MIN_HIGH_US > 0 || TRIQUAD_DATA_WAIT_US > 0
+#include <sys_tick.hxx>
+#endif
+
 #include <quad4me_config.hxx>
 
 #include "quad4me.hxx"
@@ -14,11 +18,9 @@
 
 
 
-
 namespace {
     stm32f10_12357_xx::TIM      reset_timer;
 }
-
 
 using namespace baresil::stm32f10_12357_xx;
 
@@ -77,6 +79,11 @@ void Quad4me::init()
 
     // enable falling edge detection
     bitops::SET_BITS(EXTI->FTSR, quad4me_config::ALRT_EXTI_BIT);
+#endif
+
+#if TRIQUAD_DATA_WAIT_US > 0
+    // not really one shot, will run continuously
+    arm::SysTick::one_shot(arm::SysTick::MAX_COUNTS);
 #endif
 }
 
@@ -137,32 +144,33 @@ void Quad4meBase::enable_interrupt() {
 
 
 
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
 void Quad4meBase::set_data() {
     quad4me_config::GPIO->BSRR = quad4me_config::DATA_GPIO_BIT;
 
-    static const uint32_t
-      COUNTS
-    =     baresil
-        ::stm32f10_12357_xx
-        ::mcu::microseconds_to_clocks(TRIQUAD_DATA_WAIT_US)
-      / 10;  // estimate of clocks/loop, -O1
+    uint32_t    systick_start = arm::SysTick::count();
 
     if (_phase == Phase::IDLE || _phase == Phase::ARBT) {
-        uint32_t    count = COUNTS;
-
+#ifdef TRIQUAD_STATS
+        uint32_t    prev_data_waits = _data_waits;
+#endif
         // need timout: other node(s) might be pulling line down
-        for ( ; !data() && count ; --count) {
+        while (   !data()
+               &&   arm::SysTick::elapsed(systick_start)
+                  < baresil::stm32f10_12357_xx::mcu::microseconds_to_clocks(
+                                                     TRIQUAD_DATA_WAIT_US   )) {
 #ifdef TRIQUAD_STATS
             ++_data_waits;
 #endif
             asm("nop");
         }
 
-        if (!count) {
-              _data_waits -= COUNTS;     // separate waits from timeouts
-            ++_data_timeouts      ;
+#ifdef TRIQUAD_STATS
+        if (!data()) {
+              _data_waits = prev_data_waits;     // separate waits from timeouts
+            ++_data_timeouts               ;
         }
+#endif
     }
     else if (!_prev_data)  // only if was previously set low
         while (!data()) {
@@ -174,7 +182,7 @@ void Quad4meBase::set_data() {
 
     _prev_data = 1;  // always do, for last bit of ARBT to first of META
 }
-#endif  // #if TRIQUAD_DATA_WAIT_US != 0
+#endif  // #if TRIQUAD_DATA_WAIT_US > 0
 
 
 

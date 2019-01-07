@@ -60,7 +60,7 @@ void Quad4meBase::clr_##ALRT_LTCH()         \
 QUAD4ME_CLR(alrt, quad4me_config::ALRT_GPIO_BIT)
 QUAD4ME_CLR(ltch, quad4me_config::LTCH_GPIO_BIT)
 QUAD4ME_CLR(cycl, quad4me_config::CYCL_GPIO_BIT)
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
 void Quad4meBase::clr_data() {
     quad4me_config::GPIO->BRR = quad4me_config::DATA_GPIO_BIT;
     _prev_data = 0;
