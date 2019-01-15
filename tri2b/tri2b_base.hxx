@@ -87,6 +87,7 @@ class Tri2bBase {
 #endif
 #if defined(TRIQUAD_STATS) || defined(TRIQUAD_EXTRA_MEMBERS)
         _scor            (Scor::RCVR ),
+        _systick_start   (0          ),
         _waits           (0          ),
         _data_waits      (0          ),
         _data_timeouts   (0          ),
@@ -99,7 +100,7 @@ class Tri2bBase {
         // numerically lower == higher priority
         _rank            (node_id    ),  // see rank(), below
 #endif
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
         _prev_data       (0          ),  // only if data 0->1 change
 #endif
         _pendmet         (0          ),
@@ -178,8 +179,10 @@ class Tri2bBase {
 #endif
 
 #ifdef TRIQUAD_STATS
-#define T2B_SCOR(SCOR)     _scor = SCOR
-#define T2B_WAITS        ++_waits
+#define T2B_SCOR(SCOR)  _scor = SCOR
+#define T2B_WAITS       waits_incr();
+    inline void         waits_begn(),
+                        waits_incr();
 #else
 #define T2B_SCOR(SCOR)
 #define T2B_WAITS
@@ -203,7 +206,7 @@ class Tri2bBase {
 #endif
                     clr_data();
 
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
            void     set_data();
 #endif
 
@@ -234,7 +237,8 @@ class Tri2bBase {
 #endif
 #if defined(TRIQUAD_STATS) || defined(TRIQUAD_EXTRA_MEMBERS)
           Scor      _scor            ;
-          uint32_t  _waits           ,
+          uint32_t  _systick_start   ,
+                    _waits           ,
                     _data_waits      ,
                     _data_timeouts   ;
 #endif
@@ -245,7 +249,7 @@ class Tri2bBase {
 #ifdef DYNAMIC_RANK
           uint8_t   _rank            ;
 #endif
-#if TRIQUAD_DATA_WAIT_US != 0
+#if TRIQUAD_DATA_WAIT_US > 0
           uint8_t   _prev_data       ;
 #endif
           uint8_t   _pendmet         ;

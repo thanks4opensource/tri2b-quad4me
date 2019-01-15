@@ -81,7 +81,7 @@ void Quad4me::init()
     bitops::SET_BITS(EXTI->FTSR, quad4me_config::ALRT_EXTI_BIT);
 #endif
 
-#if TRIQUAD_DATA_WAIT_US > 0
+#if defined(TRIQUAD_STATS) || TRIQUAD_DATA_WAIT_US > 0
     // not really one shot, will run continuously
     arm::SysTick::one_shot(arm::SysTick::MAX_COUNTS);
 #endif
@@ -151,34 +151,23 @@ void Quad4meBase::set_data() {
     uint32_t    systick_start = arm::SysTick::count();
 
     if (_phase == Phase::IDLE || _phase == Phase::ARBT) {
-#ifdef TRIQUAD_STATS
-        uint32_t    prev_data_waits = _data_waits;
-#endif
         // need timout: other node(s) might be pulling line down
         while (   !data()
                &&   arm::SysTick::elapsed(systick_start)
                   < baresil::stm32f10_12357_xx::mcu::microseconds_to_clocks(
-                                                     TRIQUAD_DATA_WAIT_US   )) {
-#ifdef TRIQUAD_STATS
-            ++_data_waits;
-#endif
+                                                     TRIQUAD_DATA_WAIT_US   ))
             asm("nop");
-        }
-
 #ifdef TRIQUAD_STATS
-        if (!data()) {
-              _data_waits = prev_data_waits;     // separate waits from timeouts
-            ++_data_timeouts               ;
-        }
+        if (!data()) ++_data_timeouts;
 #endif
     }
     else if (!_prev_data)  // only if was previously set low
-        while (!data()) {
-#ifdef TRIQUAD_STATS
-            ++_data_waits;
-#endif
+        while (!data())
             asm("nop");
-        }
+
+#ifdef TRIQUAD_STATS
+        _data_waits += arm::SysTick::elapsed(systick_start);
+#endif
 
     _prev_data = 1;  // always do, for last bit of ARBT to first of META
 }

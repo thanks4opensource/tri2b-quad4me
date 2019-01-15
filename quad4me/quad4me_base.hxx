@@ -85,6 +85,7 @@ class Quad4meBase {
         _role            (Role::RECVER    ),
 #if defined(TRIQUAD_STATS) || defined(TRIQUAD_EXTRA_MEMBERS)
         _scor            (Scor::RCVR ),
+        _systick_start   (0          ),
         _waits           (0          ),
         _data_waits      (0          ),
         _data_timeouts   (0          ),
@@ -176,8 +177,10 @@ class Quad4meBase {
 #endif
 
 #ifdef TRIQUAD_STATS
-#define Q4M_SCOR(SCOR)     _scor = SCOR
-#define Q4M_WAITS        ++_waits
+#define Q4M_SCOR(SCOR)  _scor = SCOR
+#define Q4M_WAITS       waits_incr();
+    inline void         waits_begn(),
+                        waits_incr();
 #else
 #define Q4M_SCOR(SCOR)
 #define Q4M_WAITS
@@ -225,7 +228,8 @@ class Quad4meBase {
           Role      _role            ;
 #if defined(TRIQUAD_STATS) || defined(TRIQUAD_EXTRA_MEMBERS)
           Scor      _scor            ;
-          uint32_t  _waits           ,
+          uint32_t  _systick_start   ,
+                    _waits           ,
                     _data_waits      ,
                     _data_timeouts   ;
 #endif

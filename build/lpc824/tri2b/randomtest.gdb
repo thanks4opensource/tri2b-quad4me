@@ -173,15 +173,19 @@ define results
     printf "last_pend    : %d\n",   randomtest::last_pend
     printf "last_send    : %d\n",   randomtest::last_send
     printf "num_loops    : %d\n",   randomtest::num_loops
-    printf "_waits       : %d\n",   randomtest::triquad_random._waits
-    printf "_data_waits  : %d\n",   randomtest::triquad_random._data_waits
-    printf "_data_timout : %d\n",   randomtest::triquad_random._data_timeouts
-    printf "_waits/bit   : %.3f\n",   (float)randomtest::triquad_random._waits \
-				    / (float)randomtest::num_bits
-    printf "_datwait/bit : %.3f\n",   (float)randomtest::triquad_random._data_waits \
-				    / (float)randomtest::num_bits
-    printf "_datmout/bit : %.3f\n",   (float)randomtest::triquad_random._data_timeouts \
-				    / (float)randomtest::num_bits
+    set var $waits_usec =   (float)randomtest::triquad_random._waits	  \
+			  / (float)mcu_config::MAIN_CLOCK_MHZ
+    set var $datwt_usec =   (float)randomtest::triquad_random._data_waits \
+			  / (float)mcu_config::MAIN_CLOCK_MHZ
+    set var $fltnumbits =   (float)randomtest::num_bits
+    printf "_waits usec  : %.1f\n", $waits_usec
+    printf "_datwt usec  : %.1f\n", $datwt_usec
+    printf "_data_tmouts : %d\n",   randomtest::triquad_random._data_timeouts
+    printf "_waits/bit   : %.3f\n", $waits_usec / $fltnumbits
+    printf "_datwait/bit : %.3f\n", $datwt_usec / $fltnumbits
+    printf "_datmout/bit : %.3f\n",   (float) \
+				      randomtest::triquad_random._data_timeouts \
+				    / $fltnumbits
     printf "sct_count    : %d\n",   randomtest::statistics_timer.count()
     set var $milliseconds =   (float)randomtest::statistics_timer.count() \
                             / (float)randomtest::SCT_KHZ

@@ -27,7 +27,6 @@
 */
 
 
-
 #include <quad4me_base.hxx>
 
 #include <quad4me.inl>
@@ -141,6 +140,10 @@ bool Quad4meBase::protocol()
         _state = State::READ;
     }
 
+#ifdef TRIQUAD_STATS
+    _systick_start = arm::SysTick::count();
+#endif
+
     while (true) {
     // will return if BIT_BY_BIT and no protocol progress,
     // remain until complete if WHOLE_MESSAGE
@@ -150,10 +153,10 @@ bool Quad4meBase::protocol()
 
         switch (_state) {
             case State::WRIT:
-                if (!cycl()) {
-                    Q4M_WAITS;
-                    RETURN_OR_CONTINUE;
-                }
+                if (!cycl()) RETURN_OR_CONTINUE;
+
+                Q4M_WAITS
+
                 if (_sendbuf & _bit) set_data();
                 else                 clr_data();
 
@@ -167,10 +170,9 @@ bool Quad4meBase::protocol()
 
 
             case State::READ:
-                if (!ltch()) {
-                    Q4M_WAITS;
-                    RETURN_OR_CONTINUE;
-                }
+                if (!ltch()) RETURN_OR_CONTINUE;
+
+                Q4M_WAITS
 
                 _recvbuf   = (_recvbuf << 1) | data();
                 _bit     >>= 1                       ;
@@ -185,10 +187,9 @@ bool Quad4meBase::protocol()
 
 
             case State::NEXT:
-            if (!alrt()) {
-                Q4M_WAITS;
-                RETURN_OR_CONTINUE;
-            }
+            if (!alrt()) RETURN_OR_CONTINUE;
+
+            Q4M_WAITS
 
             // step protocol
             clr_ltch();

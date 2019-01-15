@@ -24,7 +24,6 @@
 */
 
 
-
 #include <tri2b_base.hxx>
 
 #include <tri2b.inl>
@@ -141,6 +140,10 @@ bool Tri2bBase::protocol()
         _state = State::READ;
     }
 
+#ifdef TRIQUAD_STATS
+    _systick_start = arm::SysTick::count();
+#endif
+
     while (true) {
     // will return if BIT_BY_BIT and no protocol progress,
     // remain until complete if WHOLE_MESSAGE
@@ -149,10 +152,9 @@ bool Tri2bBase::protocol()
 
 
         if (_state == State::READ) {
-            if (!ltch_rise()) {
-                T2B_WAITS;
-                RETURN_OR_CONTINUE;
-            }
+            if (!ltch_rise()) RETURN_OR_CONTINUE;
+
+            T2B_WAITS;
 
             clr_ltch_rise();
 
@@ -167,10 +169,9 @@ bool Tri2bBase::protocol()
         }
 
         else {  // _state == State::WRIT
-            if (!alrt_rise()) {
-                T2B_WAITS;
-                RETURN_OR_CONTINUE;
-            }
+            if (!alrt_rise()) RETURN_OR_CONTINUE;
+
+            T2B_WAITS;
 
             clr_alrt_rise();
 

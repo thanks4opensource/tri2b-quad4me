@@ -6,12 +6,27 @@
 
 #include <mcu.hxx>
 
+#ifdef TRIQUAD_STATS
+#include <sys_tick.hxx>
+#endif
+
 #include "quad4me.hxx"
 
 #include <quad4me_config.hxx>
 
 
 namespace quad4me {
+
+void Quad4meBase::waits_begn()
+{
+    _systick_start = arm::SysTick::count();
+}
+
+void Quad4meBase::waits_incr()
+{
+    _waits         += arm::SysTick::elapsed(_systick_start);
+    _systick_start  = arm::SysTick::count  (              );
+}
 
 
 #define QUAD4ME_LINE(ALRT_LTCH_DATA, GPIO_BIT)      \

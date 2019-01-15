@@ -729,7 +729,7 @@ I have zero knowledge of, and even less interest in, these languages. Feel free 
 
 This repository contains code plus a (my) primitive build environment for compiling, linking, and testing it. I sincerely doubt that anyone will find the build environment useful -- if you have a potential use for the implementations you will doubtless have your own such environment. This one is included mainly as a "sanity check" that the complete codebase has been included and is buildable.
 
-The build system is primitive, idiosyncratic, and completely undocumented. I include it here without any intention of supporting it. But see [RFIIE: Build system enhancements](#rfiie_build_system_enhancements) in the event that generosity drives you to offer any suggestions for improving it.
+The build system is primitive, idiosyncratic, and completely undocumented. I include it here without any intention of supporting it. But see [RFIIE: Build system enhancements](#rfiie_build_system_enhancements) in the event that generosity drives you to offer any suggestions for its improvement.
 
 
 
