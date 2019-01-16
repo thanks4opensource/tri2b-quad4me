@@ -16,6 +16,7 @@
 
 namespace tri2b {
 
+#ifdef TRIQUAD_STATS
 void Tri2bBase::waits_begn()
 {
     _systick_start = arm::SysTick::count();
@@ -26,6 +27,9 @@ void Tri2bBase::waits_incr()
     _waits         += arm::SysTick::elapsed(_systick_start);
     _systick_start  = arm::SysTick::count  (              );
 }
+#endif // #ifdef TRIQUAD_STATS
+
+
 
 
 #define TRI2B_LINE(ALRT_LTCH_DATA, GPIO_BIT)        \

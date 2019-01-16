@@ -17,6 +17,7 @@
 
 namespace quad4me {
 
+#ifdef TRIQUAD_STATS
 void Quad4meBase::waits_begn()
 {
     _systick_start = arm::SysTick::count();
@@ -27,6 +28,8 @@ void Quad4meBase::waits_incr()
     _waits         += arm::SysTick::elapsed(_systick_start);
     _systick_start  = arm::SysTick::count  (              );
 }
+#endif // #ifdef TRIQUAD_STATS
+
 
 
 #define QUAD4ME_LINE(ALRT_LTCH_DATA, GPIO_BIT)      \
