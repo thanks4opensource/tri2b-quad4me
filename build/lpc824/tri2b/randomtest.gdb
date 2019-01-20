@@ -155,6 +155,8 @@ define results
     echo mesgs        : \ 
     output randomtest::mesgs
     echo \n
+    printf "num_ntrs     : %d\n",   randomtest::num_ntrs
+    printf "num_prts     : %d\n",   randomtest::num_prts
     printf "num_bits     : %d\n",   randomtest::num_bits
     printf "num_bytes    : %d\n",   randomtest::num_bits >> 3
     printf "num_mesgs    : %d\n",   randomtest::num_mesgs

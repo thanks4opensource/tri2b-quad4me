@@ -215,12 +215,18 @@ const uint32_t  HISTORY_MSK = 0x1f;
 volatile uint32_t   pend_data,
                     pend_meta;
 
+// flag not to re-check send_ready() if already done (TRIQUAD_INTERRUPTS)
+volatile bool   send_pend = false;
+
+
 // statistics variables
 // depending on compile-time #defines some not used, but all (most)
 //   always included for access in GDB
 volatile uint32_t   num_sends    = 0,  // number of messages sent
                     num_recvs    = 0,  //   "    "     "     received
                     num_mesgs    = 0,  //   "    "     "     sent+received
+                    num_ntrs     = 0,  // number of interrupts
+                    num_prts     = 0,  // number of protocol() calls w/message
                     num_bits     = 0,  // total number of bits in all num_mesgs
                     num_redys    = 0,  // number of times random_delay ready
                     num_pends    = 0,  //   "    "    "   pending data ready
@@ -464,7 +470,8 @@ bool send_ready() {
 #endif
                                            ) {
         ++num_redys;
-        ready = true;
+        ready     = true;
+        send_pend = true;
 #if RANDOM_DELAY_US > 0   // restart timer
         uint32_t    delay_us = bitops::xor_shift(random_delay) & delay_mask;
 
@@ -485,6 +492,7 @@ void send_data() {
 
     triquad_random.pending(pend_data, pend_meta);
 
+    send_pend = false;
     last_pend = num_mesgs;
 }
 
@@ -511,21 +519,16 @@ using namespace randomtest;
 // See README.md for rationale for time-consuming interrupt handler
 extern "C" void __attribute__ ((isr)) TRIQUAD_ALRT_ISR()
 {
+    ++num_ntrs;
+
     // must be done here, otherwise one or more other nodes can
     // interrupt-storm and this node will infrequently or never return
     // to main loop to check send_ready() and call send_data()
-    if (send_ready())
+    if (send_pend || send_ready())
         send_data();
 
     // only count time in actual protocol, unfortunately not including ISR latency
     statistics_timer.resume();
-
-    // disable immediately to avoid race condition between send_ready() and
-    // send_data() (interrupt in between, then on return send_data() when
-    // might already have done so) if main loop has called here directly
-    //
-    // don't stack pending interrupts on first and subsequent message bits
-    triquad_random.disble_alrt_fall();
 
     if (triquad_random.protocol()) {
         statistics_timer.pause();  // only time protocol
@@ -533,6 +536,7 @@ extern "C" void __attribute__ ((isr)) TRIQUAD_ALRT_ISR()
                       ? "send"
                       : "recv");
         statistics_timer.resume();  // only time protocol
+        ++num_prts;
     }
 
     statistics_timer.pause();  // if !protocol(), otherwise redundant+effectless

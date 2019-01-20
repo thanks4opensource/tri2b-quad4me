@@ -113,13 +113,13 @@ void Tri2b::init()
 
 void Tri2b::enbl_alrt_rise()
 {
-    bitops::CLR_BITS(EXTI->PR,   tri2b_config::ALRT_EXTI_BIT);
+                     EXTI->PR =  tri2b_config::ALRT_EXTI_BIT ;  // write 1 clears
     bitops::SET_BITS(EXTI->RTSR, tri2b_config::ALRT_EXTI_BIT);
 }
 
 void Tri2b::enbl_ltch_rise()
 {
-    bitops::CLR_BITS(EXTI->PR,   tri2b_config::LTCH_EXTI_BIT);
+                     EXTI->PR =  tri2b_config::LTCH_EXTI_BIT ;  // write 1 clears
     bitops::SET_BITS(EXTI->RTSR, tri2b_config::LTCH_EXTI_BIT);
 }
 
@@ -157,18 +157,18 @@ bool Tri2bBase::reset_delay_wait()
 
 #ifdef TRIQUAD_INTERRUPTS
 void Tri2bBase::enable_interrupt() {
-    // clear any pending edge detextion
-    bitops::CLR_BITS(EXTI->PR,   tri2b_config::ALRT_EXTI_BIT);
-
-    // enable rising and falling edge trigger interrupt
-    // set bit to 1 to not mask interrupt
-    bitops::SET_BITS(EXTI->IMR, tri2b_config::ALRT_EXTI_BIT);
+    // clear any pending edge detection
+    EXTI->PR = tri2b_config::ALRT_EXTI_BIT;  // write 1 clears
 
     // clear any pending interrupt
     NVIC->ICPR[0] = tri2b_config::ALRT_NVIC_BIT;
 
     // enable interrupt
     NVIC->ISER[0] = tri2b_config::ALRT_NVIC_BIT;
+
+    // enable rising and falling edge trigger interrupt
+    // set bit to 1 to not mask interrupt
+    bitops::SET_BITS(EXTI->IMR, tri2b_config::ALRT_EXTI_BIT);
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 

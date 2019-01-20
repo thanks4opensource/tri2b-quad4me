@@ -68,6 +68,14 @@ void Tri2bBase::clr_ltch_rise()
     EXTI->PR = tri2b_config::LTCH_EXTI_BIT; // writing bit clears it
 }
 
+#ifdef TRIQUAD_INTERRUPTS
+void Tri2bBase::clr_alrt_fall()
+{
+    EXTI->PR = tri2b_config::ALRT_EXTI_BIT; // writing bit clears it
+}
+#endif
+
+
 
 
 #if TRIQUAD_MIN_HIGH_US == 0
@@ -154,7 +162,7 @@ void Tri2bBase::disble_alrt_fall()
     bitops::CLR_BITS(EXTI->FTSR, tri2b_config::ALRT_EXTI_BIT);
 
     // clear any pending edge detection
-    bitops::CLR_BITS(EXTI->PR,  tri2b_config::ALRT_EXTI_BIT);
+    EXTI->PR = tri2b_config::ALRT_EXTI_BIT;   // writing bit clears it
 
 #if 0  // need to leave enabled to get edge detection
     // disable rising and falling edge trigger interrupt (can't do just falling)

@@ -66,6 +66,13 @@ void Tri2bBase::clr_ltch_rise()
     LPC_PIN_INT->RISE = tri2b_config::LTCH_PININT_BIT;  // writing bit clears it
 }
 
+#ifdef TRIQUAD_INTERRUPTS
+void Tri2bBase::clr_alrt_fall()
+{
+    LPC_PIN_INT->FALL = tri2b_config::ALRT_PININT_BIT;  // writing bit clears it
+}
+#endif
+
 
 
 

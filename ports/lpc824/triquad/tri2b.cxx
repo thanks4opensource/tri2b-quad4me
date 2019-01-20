@@ -173,17 +173,19 @@ bool Tri2bBase::reset_delay_wait()
 
 
 #ifdef TRIQUAD_INTERRUPTS
-
 void Tri2bBase::enable_interrupt() {
-    // map pin interrupts to NVIC interrupts
-      LPC_SYSCON->PINTSEL[tri2b_config::ALRT_PINTSEL_NDX]
-    = tri2b_config::ALRT_GPIO_NDX;
+    // set bits to 1 to clear any pending pin interrupts (rise or fall)
+    LPC_PIN_INT->IST = tri2b_config::ALRT_PININT_BIT;
 
     // clear any pending NVIC interrupt
     NVIC->ICPR[0] = tri2b_config::ALRT_NVIC_BIT;
 
     // enable NVIC interrupt
     NVIC->ISER[0] = tri2b_config::ALRT_NVIC_BIT;
+
+    // map pin interrupts to NVIC interrupts
+    LPC_SYSCON->PINTSEL[tri2b_config::ALRT_PINTSEL_NDX] =   tri2b_config
+                                                          ::ALRT_GPIO_NDX;
 }
 #endif  // ifdef TRIQUAD_INTERRUPTS
 

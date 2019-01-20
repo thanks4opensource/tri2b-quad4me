@@ -97,6 +97,9 @@ bool Quad4meBase::protocol()
         // cannot be in switch(_phase) after switch(_state) because READ/WRITE
         //   _state checks are different for IDLE vs ARBT/META/DATA
 
+#ifdef TRIQUAD_INTERRUPTS
+        clr_alrt_fall();
+#endif
         // check alrt low (other node(s) sending) or message ready to send
         //
         // do even in TRIQUAD_INTERRUPTS mode because can have interrupt
@@ -104,6 +107,10 @@ bool Quad4meBase::protocol()
         // and then back here after interrupt return
         if (alrt() && !_pending)
             return false;
+
+#ifdef TRIQUAD_INTERRUPTS
+        disble_alrt_fall();
+#endif
 
         // signal message start if first/only node _pending==true
         // redundant if not
@@ -279,15 +286,14 @@ bool Quad4meBase::protocol()
                     // reset to known condition for wait-for-finish loop below
                     // must be before set_cycl(), otherwise race condition
                     // if TRIQUAD_DATA_WAIT_US > 0 and set_data() is waiting
-                    // for actual high on line but another node goes ahead
-                    // into setting arbitration bit low IDLE/ARBT
-                    set_data();
+                    // for actual high on line but another node gets ahead
+                    // into setting arbitration bit low at IDLE/ARBT
                     set_cycl();
 
                     // wait for all nodes to finish message
-                    while (!(cycl() && data() && alrt() && !ltch()))
+                    while (!(cycl() && alrt() && !ltch()))
                         asm("nop");
-
+                    set_data();
                     _phase = Phase::IDLE;
 
                     MESGS;

@@ -157,6 +157,7 @@ class Quad4meBase {
            void     enable_interrupt();
     inline void     disble_alrt_fall(),
                     enable_alrt_fall();
+    inline void        clr_alrt_fall();
 #endif
 
 

@@ -11,9 +11,7 @@ using namespace bitops;
 using namespace mcu_config;
 
 
-namespace baresil {
-namespace lpc8xx {
-namespace mcu {
+namespace baresil::lpc8xx::mcu {
 
 void init()
 {
@@ -60,6 +58,9 @@ void init()
 #ifdef MCU_MRT_RESET
                                         | sys_con::p_reset_ctrl    ::MRT_BIT
 #endif
+#ifdef MCU_DMA_RESET
+                                        | sys_con::p_reset_ctrl    ::DMA_BIT
+#endif
                                                                               ,
                     ahb_clk_ctrl_bits =   0
 #ifdef MCU_GPIO_ENABLE
@@ -98,6 +99,9 @@ void init()
 #ifdef MCU_MRT_ENABLE
                                         | sys_con::sys_ahb_clk_ctrl::MRT_BIT
 #endif
+#ifdef MCU_DMA_ENABLE
+                                        | sys_con::sys_ahb_clk_ctrl::DMA_BIT
+#endif
                                                                               ;
     // reset peripherals
     CLR_BITS(LPC_SYSCON->PRESETCTRL, p_reset_ctrl_bits);
@@ -108,6 +112,4 @@ void init()
 
 } // init()
 
-} // namespace mcu
-} // namespace lpc8xx
-} // namespace baresil
+} // namespace baresil::lpc8xx::mcu

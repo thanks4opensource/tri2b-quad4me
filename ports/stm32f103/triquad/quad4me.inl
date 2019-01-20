@@ -93,12 +93,12 @@ QUAD4ME_CLR(data, quad4me_config::DATA_GPIO_BIT)
 #ifdef TRIQUAD_INTERRUPTS
 void Quad4meBase::disble_alrt_fall()
 {
-    // clear any pending edge detection
-    bitops::CLR_BITS(EXTI->PR,  quad4me_config::ALRT_EXTI_BIT);
-
     // enable rising and falling edge trigger interrupt
     // set bit to 1 to not mask interrupt
     bitops::SET_BITS(EXTI->IMR, quad4me_config::ALRT_EXTI_BIT);
+
+    // clear any pending edge detection
+    EXTI->PR = quad4me_config::ALRT_EXTI_BIT; // writing bit clears it
 }
 
 void Quad4meBase::enable_alrt_fall()
@@ -106,6 +106,12 @@ void Quad4meBase::enable_alrt_fall()
     // enable rising and falling edge trigger interrupt
     // set bit to 1 to not mask interrupt
     bitops::SET_BITS(EXTI->IMR, quad4me_config::ALRT_EXTI_BIT);
+}
+
+
+void Quad4meBase::clr_alrt_fall()
+{
+    EXTI->PR = quad4me_config::ALRT_EXTI_BIT; // writing bit clears it
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 

@@ -216,6 +216,10 @@ class Tri2bBase {
     inline void     clr_alrt_rise(),
                     clr_ltch_rise();
 
+#ifdef TRIQUAD_INTERRUPTS
+    inline void     clr_alrt_fall();
+#endif
+
     inline bool     alrt() volatile const,
                     ltch() volatile const,
                     data() volatile const;

@@ -127,18 +127,18 @@ bool Quad4meBase::reset_delay_wait()
 
 #ifdef TRIQUAD_INTERRUPTS
 void Quad4meBase::enable_interrupt() {
-    // clear any pending edge detextion
-    bitops::CLR_BITS(EXTI->PR,   quad4me_config::ALRT_EXTI_BIT);
-
-    // enable rising and falling edge trigger interrupt
-    // set bit to 1 to not mask interrupt
-    bitops::SET_BITS(EXTI->IMR, quad4me_config::ALRT_EXTI_BIT);
+    // clear any pending edge detection
+    EXTI->PR = quad4me_config::ALRT_EXTI_BIT;    // write 1 clears
 
     // clear any pending interrupt
     NVIC->ICPR[0] = quad4me_config::ALRT_NVIC_BIT;
 
     // enable interrupt
     NVIC->ISER[0] = quad4me_config::ALRT_NVIC_BIT;
+
+    // enable rising and falling edge trigger interrupt
+    // set bit to 1 to not mask interrupt
+    bitops::SET_BITS(EXTI->IMR, quad4me_config::ALRT_EXTI_BIT);
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 

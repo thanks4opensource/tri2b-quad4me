@@ -566,8 +566,142 @@ static const uint32_t   PINTSEL_BITS  = 0xff,
                         PINTSEL_5_BIT = 1 << PINTSEL_5_POS,
                         PINTSEL_6_BIT = 1 << PINTSEL_6_POS,
                         PINTSEL_7_BIT = 1 << PINTSEL_7_POS;
-
 } // namespace pin_int
+
+
+namespace dma {
+struct ChnlDesc {
+        uint32_t   cfg;  // only used in linked lists and ping-pong configs
+        void      *src,  // source     end address
+                  *dst;  // destination end address
+        uint32_t   nxt;  // must be 16 byte aligned
+};
+
+static const uint8_t    USART0_RX_POS =  0,
+                        USART0_TX_POS =  1,
+                        USART1_RX_POS =  2,
+                        USART1_TX_POS =  3,
+                        USART2_RX_POS =  4,
+                        USART2_TX_POS =  5,
+                        SPI0_RX_POS   =  6,
+                        SPI0_TX_POS   =  7,
+                        SPI1_RX_POS   =  8,
+                        SPI1_TX_POS   =  9,
+                        I2C0_SLV_POS  = 10,
+                        I2C0_MST_POS  = 11,
+                        I2C1_SLV_POS  = 12,
+                        I2C1_MST_POS  = 13,
+                        I2C2_SLV_POS  = 14,
+                        I2C2_MST_POS  = 15,
+                        I2C3_SLV_POS  = 16,
+                        I2C3_MST_POS  = 17;
+static const uint32_t   USART0_RX_BIT = (1 << USART0_RX_POS),
+                        USART0_TX_BIT = (1 << USART0_TX_POS),
+                        USART1_RX_BIT = (1 << USART1_RX_POS),
+                        USART1_TX_BIT = (1 << USART1_TX_POS),
+                        USART2_RX_BIT = (1 << USART2_RX_POS),
+                        USART2_TX_BIT = (1 << USART2_TX_POS),
+                        SPI0_RX_BIT   = (1 << SPI0_RX_POS  ),
+                        SPI0_TX_BIT   = (1 << SPI0_TX_POS  ),
+                        SPI1_RX_BIT   = (1 << SPI1_RX_POS  ),
+                        SPI1_TX_BIT   = (1 << SPI1_TX_POS  ),
+                        I2C0_SLV_BIT  = (1 << I2C0_SLV_POS ),
+                        I2C0_MST_BIT  = (1 << I2C0_MST_POS ),
+                        I2C1_SLV_BIT  = (1 << I2C1_SLV_POS ),
+                        I2C1_MST_BIT  = (1 << I2C1_MST_POS ),
+                        I2C2_SLV_BIT  = (1 << I2C2_SLV_POS ),
+                        I2C2_MST_BIT  = (1 << I2C2_MST_POS ),
+                        I2C3_SLV_BIT  = (1 << I2C3_SLV_POS ),
+                        I2C3_MST_BIT  = (1 << I2C3_MST_POS );
+
+namespace cfg {
+static const uint8_t    ENABLE_POS       =  0               ;
+static const uint32_t   ENABLE_BIT       = (1 << ENABLE_POS);
+} // namespace cfg
+
+namespace chnl {
+namespace cfg {
+static const uint8_t    PERIPHREQEN_POS  =  0,
+                        HWTRIGEN_POS     =  1,
+                        TRIGPOL_POS      =  4,
+                        TRIGTYPE_POS     =  5,
+                        TRIGBURST_POS    =  6,
+                        BURSTPOWER_POS =    8,
+                        SRCBURSTWRAP_POS = 14,
+                        DSTBURSTWRAP_POS = 15,
+                        CHPRIORITY_POS   = 16;
+static const uint32_t   PERIPHREQEN_BIT        = (     1 << PERIPHREQEN_POS ),
+                        HWTRIGEN_BIT           = (     1 << HWTRIGEN_POS    ),
+                        TRIGPOL_MASK           = (     1 << TRIGPOL_POS     ),
+                          TRIGPOL_LOW          = (     0 << TRIGPOL_POS     ),
+                          TRIGPOL_HIGH         = (     1 << TRIGPOL_POS     ),
+                        TRIGTYPE_MASK          = (     1 << TRIGTYPE_POS    ),
+                          TRIGTYPE_EDGE        = (     0 << TRIGTYPE_POS    ),
+                          TRIGTYPE_LEVEL       = (     0 << TRIGTYPE_POS    ),
+                        TRIGBURST_MASK         = (     1 << TRIGBURST_POS   ),
+                          TRIGBURST_SINGLE     = (     0 << TRIGBURST_POS   ),
+                          TRIGBURST_BURST      = (     1 << TRIGBURST_POS   ),
+                        BURSTPOWER_MASK        = (   0xf << BURSTPOWER_POS  ),
+                          BURSTPOWER_1_BITS    = (0b0000 << BURSTPOWER_POS  ),
+                          BURSTPOWER_2_BITS    = (0b0001 << BURSTPOWER_POS  ),
+                          BURSTPOWER_4_BITS    = (0b0010 << BURSTPOWER_POS  ),
+                          BURSTPOWER_8_BITS    = (0b0011 << BURSTPOWER_POS  ),
+                          BURSTPOWER_16_BITS   = (0b0100 << BURSTPOWER_POS  ),
+                          BURSTPOWER_32_BITS   = (0b0101 << BURSTPOWER_POS  ),
+                          BURSTPOWER_64_BITS   = (0b0110 << BURSTPOWER_POS  ),
+                          BURSTPOWER_128_BITS  = (0b0111 << BURSTPOWER_POS  ),
+                          BURSTPOWER_256_BITS  = (0b1000 << BURSTPOWER_POS  ),
+                          BURSTPOWER_512_BITS  = (0b1001 << BURSTPOWER_POS  ),
+                          BURSTPOWER_1024_BITS = (0b1010 << BURSTPOWER_POS  ),
+                        SRCBURSTWRAP_BIT       = (    1  << SRCBURSTWRAP_POS),
+                        DSTBURSTWRAP_BIT       = (    1  << DSTBURSTWRAP_POS),
+                        CHPRIORITY_MASK        = (   0x7 << CHPRIORITY_POS  ),
+                          CHPRIORITY_0_BITS    = (   0x0 << CHPRIORITY_POS  ),
+                          CHPRIORITY_1_BITS    = (   0x1 << CHPRIORITY_POS  ),
+                          CHPRIORITY_2_BITS    = (   0x2 << CHPRIORITY_POS  ),
+                          CHPRIORITY_3_BITS    = (   0x3 << CHPRIORITY_POS  ),
+                          CHPRIORITY_4_BITS    = (   0x4 << CHPRIORITY_POS  ),
+                          CHPRIORITY_5_BITS    = (   0x5 << CHPRIORITY_POS  ),
+                          CHPRIORITY_6_BITS    = (   0x6 << CHPRIORITY_POS  ),
+                          CHPRIORITY_7_BITS    = (   0x7 << CHPRIORITY_POS  );
+} // namespace cfg
+namespace xfercfg {
+static const uint8_t    CFGVALID_POS  =  0,
+                        RELOAD_POS    =  1,
+                        SWTRIG_POS    =  2,
+                        CLRTRIG_POS   =  3,
+                        SETINTA_POS   =  4,
+                        SETINTB_POS   =  5,
+                        WIDTH_POS     =  8,
+                        SRCINC_POS    = 12,
+                        DSTINC_POS    = 14,
+                        XFERCOUNT_POS = 16;
+static const uint32_t   CFGVALID_BIT    = (    1 << CFGVALID_POS ),
+                        RELOAD_BIT      = (    1 << RELOAD_POS   ),
+                        SWTRIG_BIT      = (    1 << SWTRIG_POS   ),
+                        CLRTRIG_BIT     = (    1 << CLRTRIG_POS  ),
+                        SETINTA_BIT     = (    1 << SETINTA_POS  ),
+                        SETINTB_BIT     = (    1 << SETINTB_POS  ),
+                        WIDTH_MASK      = (0x003 << WIDTH_POS    ),
+                          WIDTH_8_BITS  = (0x000 << WIDTH_POS    ),
+                          WIDTH_16_BITS = (0x001 << WIDTH_POS    ),
+                          WIDTH_32_BITS = (0x002 << WIDTH_POS    ),
+                        SRCINC_MASK     = (0x003 << SRCINC_POS   ),
+                          SRCINC_0_BITS = (0x000 << SRCINC_POS   ),
+                          SRCINC_1_BITS = (0x001 << SRCINC_POS   ),
+                          SRCINC_2_BITS = (0x002 << SRCINC_POS   ),
+                          SRCINC_3_BITS = (0x003 << SRCINC_POS   ),
+                        DSTINC_MASK     = (0x003 << DSTINC_POS   ),
+                          DSTINC_0_BITS = (0x000 << DSTINC_POS   ),
+                          DSTINC_1_BITS = (0x001 << DSTINC_POS   ),
+                          DSTINC_2_BITS = (0x002 << DSTINC_POS   ),
+                          DSTINC_3_BITS = (0x003 << DSTINC_POS   ),
+                        XFERCOUNT_MASK  = (0x3ff << XFERCOUNT_POS);
+static inline uint32_t  XFERCOUNT(const uint16_t    count)
+                        { return ((count & 0x3ff) - 1) << XFERCOUNT_POS; }
+} // namespace xfercfg
+} // namespace chnl
+} // namespace dma {
 
 
 namespace usart {
@@ -587,7 +721,7 @@ static const uint8_t    ENABLE_POS       =  0,
                         OEPOL_POS        = 21,
                         RXPOL_POS        = 22,
                         TXPOL_POS        = 23;
-         const uint32_t ENABLE_BIT       = (  1 << ENABLE_POS     ),
+static const uint32_t   ENABLE_BIT       = (  1 << ENABLE_POS     ),
                         DATALEN_MASK     = (0x3 << DATALEN_POS    ),
                           DATALEN_7_BITS = (0x0 << DATALEN_POS    ),
                           DATALEN_8_BITS = (0x1 << DATALEN_POS    ),

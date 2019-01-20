@@ -93,6 +93,10 @@ bool Tri2bBase::protocol()
         // cannot be in switch(_phase) after switch(_state) because READ/WRITE
         //   _state checks are different for IDLE vs ARBT/META/DATA
 
+#ifdef TRIQUAD_INTERRUPTS
+        clr_alrt_fall();
+#endif
+
         // check alrt low (other node(s) sending) or message ready to send
         //
         // do even in TRIQUAD_INTERRUPTS mode because can have interrupt
@@ -100,6 +104,10 @@ bool Tri2bBase::protocol()
         // and then back here after interrupt return
         if (alrt() && !_pending)
             return false;
+
+#ifdef TRIQUAD_INTERRUPTS
+        disble_alrt_fall();
+#endif
 
         // clear any pending rising edges
         clr_alrt_rise();
@@ -258,27 +266,25 @@ bool Tri2bBase::protocol()
                         _pending = false;
 
 #ifdef TRIQUAD_INTERRUPTS
-                    // before final set_cycl() to be ready for other
+                    // before final set_alrt() to be ready for other
                     // nodes starting next message
                     enable_alrt_fall();
 #endif
 
 
                     // reset to known condition for wait-for-finish loop below
-                    // must be before set_cycl(), otherwise race condition
+                    // must be before set_alrt(), otherwise race condition
                     // if TRIQUAD_DATA_WAIT_US > 0 and set_data() is waiting
-                    // for actual high on line but another node get ahead
-                    // into setting arbitration bit low IDLE/ARBT
-                    set_data();
+                    // for actual high on line but another node gets ahead
+                    // into setting arbitration bit low at IDLE/ARBT
                     set_alrt();
 
                     clr_alrt_rise();  // in case all others high, don't want
 
                     // wait for all nodes to finish message
-                    while (!(data() && alrt() && !ltch())) {
+                    while (!(alrt() && !ltch()))
                         asm("nop");
-                    }
-
+                    set_data();
                     _phase = Phase::IDLE;
 
                     MESGS;

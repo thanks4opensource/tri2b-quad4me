@@ -80,17 +80,22 @@ QUAD4ME_SET_CLR(data, quad4me_config::DATA_GPIO_NDX)
 #ifdef TRIQUAD_INTERRUPTS
 void Quad4meBase::disble_alrt_fall()
 {
-    // set bit to 1 to clear any pending pin interrupt
-    LPC_PIN_INT->FALL = quad4me_config::ALRT_PININT_BIT;
-
     // disable falling edge detection (and interrupt)
     LPC_PIN_INT->CIENF = quad4me_config::ALRT_PININT_BIT;
+
+    // set bit to 1 to clear any pending pin interrupt
+    LPC_PIN_INT->FALL = quad4me_config::ALRT_PININT_BIT;
 }
 
 void Quad4meBase::enable_alrt_fall()
 {
     // enable falling edge detection (and interrupt)
     LPC_PIN_INT->SIENF = quad4me_config::ALRT_PININT_BIT;
+}
+
+void Quad4meBase::clr_alrt_fall()
+{
+    LPC_PIN_INT->FALL = quad4me_config::ALRT_PININT_BIT; // writing bit clears it
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 

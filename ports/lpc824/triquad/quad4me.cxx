@@ -120,16 +120,10 @@ bool Quad4meBase::reset_delay_wait()
 #define EDGE_SENSITIVE   // DEBUG
 
 void Quad4meBase::enable_interrupt() {
-    // map pin interrupts to NVIC interrupts
-      LPC_SYSCON->PINTSEL[quad4me_config::ALRT_PINTSEL_NDX]
-    = quad4me_config::ALRT_GPIO_NDX;
-
 #ifdef LEVEL_SENSITIVE
     // set to level (vs edge) sensitive
     LPC_PIN_INT->ISEL = quad4me_config::ALRT_PININT_BIT;
-#endif
 
-#ifdef LEVEL_SENSITIVE
     // enable line low detection (and interrupt)
     // IENF controls (IENR not used for level detection)
     // bit==1 means high detection, ==0 low
@@ -140,12 +134,18 @@ void Quad4meBase::enable_interrupt() {
     LPC_PIN_INT->SIENF = quad4me_config::ALRT_PININT_BIT;
 #endif
 
+    // set bits to 1 to clear any pending pin interrupts (rise or fall)
+    LPC_PIN_INT->IST = quad4me_config::ALRT_PININT_BIT;
+
     // clear any pending NVIC interrupt
     NVIC->ICPR[0] = quad4me_config::ALRT_NVIC_BIT;
 
     // enable NVIC interrupt
     NVIC->ISER[0] = quad4me_config::ALRT_NVIC_BIT;
 
+    // map pin interrupts to NVIC interrupts
+    LPC_SYSCON->PINTSEL[quad4me_config::ALRT_PINTSEL_NDX] =   quad4me_config
+                                                            ::ALRT_GPIO_NDX;
 #undef LEVEL_SENSITIVE
 #undef EDGE_SENSITIVE
 }
