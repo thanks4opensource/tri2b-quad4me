@@ -15,6 +15,8 @@ EXTRA_CXX_FLAGS ?= -fno-threadsafe-statics			\
 		   -DTRIQUAD_TRI2B				\
 		    $(TRIQUAD_FLAGS)
 EXTRA_INCLUDES  ?= -I$(DEVEL_ROOT)/include/triquad		\
+-I$(DEVEL_ROOT)/triquad\
+-I$(DEVEL_ROOT)/quad4me\
 -I$(DEVEL_ROOT)/tri2b\
 -I$(DEVEL_ROOT)/ports/stm32f103/triquad\
 -I$(DEVEL_ROOT)/include/stm\
@@ -22,12 +24,15 @@ EXTRA_INCLUDES  ?= -I$(DEVEL_ROOT)/include/triquad		\
 		   -I$(DEVEL_ROOT)/include/st/32f		\
 		   -I$(DEVEL_ROOT)/ports/stm32f103/util	\
 		   -I$(DEVEL_ROOT)/util/tri2b			\
+		   -I$(DEVEL_ROOT)/util/triquad			\
 		   -I..
 EXTRA_VPATH      =   $(DEVEL_ROOT)/randomtest			\
+$(DEVEL_ROOT)/triquad\
 $(DEVEL_ROOT)/tri2b\
 $(DEVEL_ROOT)/ports/stm32f103/triquad\
 		     $(DEVEL_ROOT)/ports/stm32f103/util	\
-		     $(DEVEL_ROOT)/util/tri2b
+		     $(DEVEL_ROOT)/util/tri2b			\
+		     $(DEVEL_ROOT)/util/triquad
 
 OPTIMIZE_FLAG  ?= -O1
 STANDARD_FLAG  ?= -std=c++11
@@ -37,6 +42,7 @@ CXX_SRCS = $(PROGRAM_NAME).cxx	\
 	   mcu.cxx 		\
 	   tim.cxx		\
            tim_m_s.cxx 		\
+	   tri_quad.cxx		\
 	   tri2b.cxx 	 	\
 	   tri2b_base.cxx
 

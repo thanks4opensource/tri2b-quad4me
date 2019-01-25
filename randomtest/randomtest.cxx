@@ -122,6 +122,9 @@ NVIC table
 #define HALT_ON_ERROR
 
 
+using namespace triquad;
+
+
 
 namespace randomtest {
 
@@ -503,7 +506,7 @@ void send_data() {
 // simple implementation
 // actual client likely non-linear mapping, e.g. small number of
 //    message types each of known, fixed size
-uint8_t TriquadBase ::meta2bits(
+uint8_t TriQuad ::meta2bits(
 uint8_t meta)
 {
     return meta;
@@ -574,7 +577,7 @@ int main()
 
     // hack to reset timebase of random_delay_timer if reused/same
     // hardware timer as reset_timer
-    triquad_random.post_reset();
+    post_reset();
 
 
     // run

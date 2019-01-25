@@ -11,12 +11,10 @@
 #endif
 #include <tri2b_config.hxx>
 
-typedef tri2b::Tri2bBase        TriquadBase;
-typedef tri2b::Tri2b            Triquad    ;
+typedef triquad::Tri2bBase        TriquadBase;
+typedef triquad::Tri2b            Triquad    ;
 
 namespace   triquad_config = tri2b_config;
-
-using namespace tri2b;  // for randomtest.cxx
 #endif  // #ifdef TRIQUAD_TRI2B
 
 
@@ -27,12 +25,10 @@ using namespace tri2b;  // for randomtest.cxx
 #endif
 #include <quad4me_config.hxx>
 
-typedef quad4me::Quad4meBase    TriquadBase;
-typedef quad4me::Quad4me        Triquad    ;
+typedef triquad::Quad4meBase    TriquadBase;
+typedef triquad::Quad4me        Triquad    ;
 
 namespace   triquad_config = quad4me_config;
-
-using namespace quad4me;  // for randomtest.cxx
 #endif  // #ifdef TRIQUAD_QUAD4ME
 
 
@@ -116,6 +112,19 @@ void randomtest_init()
                                                   ::mcu
                                                   ::microseconds_to_clocks(1)));
 #endif
+}
+
+
+
+void post_reset() {
+    if (triquad_config::RANDOM_DELAY_TIMER == triquad_config::RESET_NODES_TIMER)
+        // reset timebase because reusing same timer
+         random_delay_timer
+        .init(triquad_config::RANDOM_DELAY_TIMER,
+              static_cast<uint16_t>(     baresil
+                                    ::stm32f10_12357_xx
+                                    ::mcu
+                                    ::microseconds_to_clocks(1)));
 }
 
 } // namespace randomtest

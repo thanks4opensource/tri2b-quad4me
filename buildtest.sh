@@ -38,6 +38,20 @@ for dir in \
     INTRPT_POLL=INTERRUPTS \
     TRIQUAD_PROTOCOL=-DTRIQUAD_WHOLE_MESSAGE \
     PROGRESS=-UTRIQUAD_PROGRESS \
+    STATS=-UTRIQUAD_STATS \
+    WARNINGS_FLAG='-Wextra -Wswitch --warn-no-return-type -Werror'
+    if [ $? != 0 ] ; then pwd ; exit ; fi
+    pwd
+    echo -e \\n\\n\\n
+
+    pwd
+    echo -e \\n\\n\\n
+    pwd
+    make clean && \
+    make \
+    INTRPT_POLL=INTERRUPTS \
+    TRIQUAD_PROTOCOL=-DTRIQUAD_WHOLE_MESSAGE \
+    PROGRESS=-UTRIQUAD_PROGRESS \
     WARNINGS_FLAG='-Wextra -Wswitch --warn-no-return-type -Werror'
     if [ $? != 0 ] ; then pwd ; exit ; fi
     pwd

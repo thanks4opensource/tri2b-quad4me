@@ -5,7 +5,7 @@
 
 
 
-namespace tri2b {
+namespace triquad {
 
 class Tri2b : public Tri2bBase {
   public:
@@ -22,10 +22,11 @@ class Tri2b : public Tri2bBase {
                     node_id       )
     {}
 
-    void init();
+    void    init (),
+            reset();
 
 }; // class Tri2b
 
-} // namespace lpc
+} // namespace triquad
 
 #endif   // ifndef tri2b_hxx

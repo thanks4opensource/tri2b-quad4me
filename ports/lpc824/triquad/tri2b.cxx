@@ -17,21 +17,14 @@
 
 
 
-// OK if same as e.g. randomtest_port.inl's #ifdef RANDOM_DELAY_US because
-// never used at same time
-static const uint8_t    MRT_CHANNEL = 0;
-
-
-
-namespace tri2b {
+namespace triquad {
 
 // Tri2b derived class-specific methods
 //
 
 void Tri2b::init()
 {
-    Tri2bBase::init();
-
+    TriQuad::init();
 
     // enable writing to IOCON registers
     bitops::SET_BITS(LPC_SYSCON->SYSAHBCLKCTRL,
@@ -148,32 +141,38 @@ void Tri2b::init()
 
 
 
-// Tri2bBase architecture-specific implemented methods
-//
-
-void Tri2bBase::post_reset()
+void Tri2b::reset()
 {
+    Tri2bBase::reset();
+    TriQuad  ::reset();
+#ifdef TRIQUAD_INTERRUPTS
+    enable_interrupt();
+    enable_alrt_fall();
+#endif
 }
 
 
 
-void Tri2bBase::reset_delay_start()
+// TriQuad architecture-specific implemented methods
+//
+
+void TriQuad::reset_delay_start()
 {
-    lpc::MRT::one_shot(MRT_CHANNEL,
+    lpc::MRT::one_shot(tri2b_config::SYNC_NODES_MRT_CHANNEL,
                          mcu
                        ::milliseconds_to_clocks(  tri2b_config
                                                 ::SYNC_NODES_DELAY_MILLISECS));
 }
 
 
-bool Tri2bBase::reset_delay_wait()
+bool TriQuad::reset_delay_wait()
 {
-    return lpc::MRT::is_running(MRT_CHANNEL);
+    return lpc::MRT::is_running(tri2b_config::SYNC_NODES_MRT_CHANNEL);
 }
 
 
 #ifdef TRIQUAD_INTERRUPTS
-void Tri2bBase::enable_interrupt() {
+void TriQuad::enable_interrupt() {
     // set bits to 1 to clear any pending pin interrupts (rise or fall)
     LPC_PIN_INT->IST = tri2b_config::ALRT_PININT_BIT;
 
@@ -192,7 +191,7 @@ void Tri2bBase::enable_interrupt() {
 
 
 #if TRIQUAD_DATA_WAIT_US > 0
-void Tri2bBase::set_data() {
+void TriQuad::set_data() {
     LPC_GPIO_PORT->B0[tri2b_config::DATA_GPIO_NDX] = 1;
 
     uint32_t    systick_start = arm::SysTick::count();
@@ -223,4 +222,4 @@ void Tri2bBase::set_data() {
 
 
 
-} // namespace tri2b
+} // namespace triquad

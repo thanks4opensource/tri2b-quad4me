@@ -12,10 +12,10 @@
 #endif
 #include <tri2b_config.hxx>
 
-typedef tri2b::Tri2bBase    TriquadBase;
-typedef tri2b::Tri2b        Triquad    ;
+typedef triquad::Tri2bBase    TriquadBase;
+typedef triquad::Tri2b        Triquad    ;
 
-using namespace tri2b;  // for randomtest.cxx
+namespace triquad_config = tri2b_config;
 #endif  // #ifdef TRIQUAD_TRI2B
 
 
@@ -26,10 +26,10 @@ using namespace tri2b;  // for randomtest.cxx
 #endif
 #include <quad4me_config.hxx>
 
-typedef quad4me::Quad4meBase    TriquadBase;
-typedef quad4me::Quad4me        Triquad    ;
+typedef triquad::Quad4meBase    TriquadBase;
+typedef triquad::Quad4me        Triquad    ;
 
-using namespace quad4me;  // for randomtest.cxx
+namespace triquad_config = quad4me_config;
 #endif  // #ifdef TRIQUAD_QUAD4ME
 
 
@@ -62,8 +62,11 @@ Triquad                     triquad_random(TRIQUAD_NUM_NODES,
 
 
 #if RANDOM_DELAY_US > 0
-static const uint8_t    DELAY_CHANNEL = 0;
+static const uint8_t    RANDOM_DELAY_CHANNEL = 0;
 lpc::MRT                random_delay_timer;
+
+static_assert(RANDOM_DELAY_CHANNEL != triquad_config::SYNC_NODES_MRT_CHANNEL,
+	     "RANDOM_DELAY_CHANNEL != triquad_config::SYNC_NODES_MRT_CHANNEL");
 
 uint32_t milliseconds_to_clocks(
 const uint32_t  milliseconds)
@@ -81,12 +84,12 @@ const uint32_t  microseconds)
 void random_delay_timer_one_shot(
 uint32_t    delay)
 {
-    random_delay_timer.one_shot(DELAY_CHANNEL, delay);
+    random_delay_timer.one_shot(RANDOM_DELAY_CHANNEL, delay);
 }
 
 bool random_delay_timer_is_running()
 {
-    return random_delay_timer.is_running(DELAY_CHANNEL);
+    return random_delay_timer.is_running(RANDOM_DELAY_CHANNEL);
 }
 #endif  // #if RANDOM_DELAY_US > 0
 
@@ -94,6 +97,11 @@ bool random_delay_timer_is_running()
 
 void randomtest_init() {
     baresil::lpc8xx::mcu::init();
+}
+
+
+
+void post_reset() {
 }
 
 } // namespace randomtest

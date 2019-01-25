@@ -26,7 +26,7 @@ using namespace baresil::stm32f10_12357_xx;
 
 
 
-namespace tri2b {
+namespace triquad {
 
 // Tri2b derived class-specific methods
 //
@@ -111,6 +111,18 @@ void Tri2b::init()
 
 
 
+void Tri2b::reset()
+{
+    Tri2bBase::reset();
+    TriQuad  ::reset();
+#ifdef TRIQUAD_INTERRUPTS
+    enable_interrupt();
+    enable_alrt_fall();
+#endif
+}
+
+
+
 void Tri2b::enbl_alrt_rise()
 {
                      EXTI->PR =  tri2b_config::ALRT_EXTI_BIT ;  // write 1 clears
@@ -125,30 +137,16 @@ void Tri2b::enbl_ltch_rise()
 
 
 
-// Tri2bBase architecture-specific implemented methods
+// TriQuad architecture-specific implemented methods
 //
 
-void Tri2bBase::post_reset()
-{
-    if (tri2b_config::RANDOM_DELAY_TIMER == tri2b_config::RESET_NODES_TIMER)
-        // reset timebase because reusing same timer
-
-        reset_timer.init(tri2b_config::RANDOM_DELAY_TIMER,
-                         static_cast<uint16_t>(  baresil
-                                               ::stm32f10_12357_xx
-                                               ::mcu
-                                               ::microseconds_to_clocks(1)));
-}
-
-
-
-void Tri2bBase::reset_delay_start()
+void TriQuad::reset_delay_start()
 {
     reset_timer.one_shot(tri2b_config::SYNC_NODES_DELAY_MILLISECS);
 }
 
 
-bool Tri2bBase::reset_delay_wait()
+bool TriQuad::reset_delay_wait()
 {
     return reset_timer.is_running();
 }
@@ -156,7 +154,7 @@ bool Tri2bBase::reset_delay_wait()
 
 
 #ifdef TRIQUAD_INTERRUPTS
-void Tri2bBase::enable_interrupt() {
+void TriQuad::enable_interrupt() {
     // clear any pending edge detection
     EXTI->PR = tri2b_config::ALRT_EXTI_BIT;  // write 1 clears
 
@@ -175,7 +173,7 @@ void Tri2bBase::enable_interrupt() {
 
 
 #if TRIQUAD_DATA_WAIT_US > 0
-void Tri2bBase::set_data() {
+void TriQuad::set_data() {
     tri2b_config::GPIO->BSRR = tri2b_config::DATA_GPIO_BIT;
 
     uint32_t    systick_start = arm::SysTick::count();
@@ -206,4 +204,4 @@ void Tri2bBase::set_data() {
 
 
 
-} // namespace tri2b
+} // namespace triquad

@@ -15,15 +15,15 @@
 #include <quad4me_config.hxx>
 
 
-namespace quad4me {
+namespace triquad {
 
 #ifdef TRIQUAD_STATS
-void Quad4meBase::waits_begn()
+void TriQuad::waits_begn()
 {
     _systick_start = arm::SysTick::count();
 }
 
-void Quad4meBase::waits_incr()
+void TriQuad::waits_incr()
 {
     _waits         += arm::SysTick::elapsed(_systick_start);
     _systick_start  = arm::SysTick::count  (              );
@@ -33,53 +33,60 @@ void Quad4meBase::waits_incr()
 
 
 #define QUAD4ME_LINE(ALRT_LTCH_DATA, GPIO_BIT)      \
-bool Quad4meBase::ALRT_LTCH_DATA()                  \
+bool TriQuad::ALRT_LTCH_DATA()                  \
 volatile const                                      \
 {                                                   \
     asm volatile("" ::: "memory");                  \
     return quad4me_config::GPIO->IDR & GPIO_BIT;    \
 }
 
+bool Quad4meBase::cycl()
+volatile const
+{
+    asm volatile("" ::: "memory");
+    return quad4me_config::GPIO->IDR & quad4me_config::CYCL_GPIO_BIT;
+}
+
+
 QUAD4ME_LINE(alrt, quad4me_config::ALRT_GPIO_BIT)
 QUAD4ME_LINE(ltch, quad4me_config::LTCH_GPIO_BIT)
-QUAD4ME_LINE(cycl, quad4me_config::CYCL_GPIO_BIT)
 QUAD4ME_LINE(data, quad4me_config::DATA_GPIO_BIT)
 #undef BITS
 #undef QUAD4ME_LINE
 
 
 
-// warning: hardcoded
 #define QUAD4ME_SET(ALRT_LTCH, GPIO_BIT)    \
-void Quad4meBase::set_##ALRT_LTCH()         \
+void TriQuad::set_##ALRT_LTCH()             \
 {                                           \
     asm volatile("" ::: "memory");          \
     quad4me_config::GPIO->BSRR = GPIO_BIT;  \
-    while (!(GPIOB->ODR & GPIO_BIT))        \
-        asm("nop");                         \
 }
 QUAD4ME_SET(alrt, quad4me_config::ALRT_GPIO_BIT)
 QUAD4ME_SET(ltch, quad4me_config::LTCH_GPIO_BIT)
-QUAD4ME_SET(cycl, quad4me_config::CYCL_GPIO_BIT)
 #if TRIQUAD_DATA_WAIT_US == 0
 QUAD4ME_SET(data, quad4me_config::DATA_GPIO_BIT)
 #endif
 #undef QUAD4ME_SET
 
-// warning: hardcoded
+void Quad4meBase::set_cycl()
+{
+    asm volatile("" ::: "memory");
+    quad4me_config::GPIO->BSRR = quad4me_config::CYCL_GPIO_BIT;
+}
+
+
+
 #define QUAD4ME_CLR(ALRT_LTCH, GPIO_BIT)    \
-void Quad4meBase::clr_##ALRT_LTCH()         \
+void TriQuad::clr_##ALRT_LTCH()             \
 {                                           \
     asm volatile("" ::: "memory");          \
     quad4me_config::GPIO->BRR = GPIO_BIT;   \
-    while (GPIOB->ODR & GPIO_BIT)           \
-        asm("nop");                         \
 }
 QUAD4ME_CLR(alrt, quad4me_config::ALRT_GPIO_BIT)
 QUAD4ME_CLR(ltch, quad4me_config::LTCH_GPIO_BIT)
-QUAD4ME_CLR(cycl, quad4me_config::CYCL_GPIO_BIT)
 #if TRIQUAD_DATA_WAIT_US > 0
-void Quad4meBase::clr_data() {
+void TriQuad::clr_data() {
     quad4me_config::GPIO->BRR = quad4me_config::DATA_GPIO_BIT;
     _prev_data = 0;
 }
@@ -88,10 +95,16 @@ QUAD4ME_CLR(data, quad4me_config::DATA_GPIO_BIT)
 #endif
 #undef QUAD4ME_CLR
 
+void Quad4meBase::clr_cycl()
+{
+    asm volatile("" ::: "memory")                            ;
+    quad4me_config::GPIO->BRR = quad4me_config::CYCL_GPIO_BIT;
+}
+
 
 
 #ifdef TRIQUAD_INTERRUPTS
-void Quad4meBase::disble_alrt_fall()
+void TriQuad::disble_alrt_fall()
 {
     // enable rising and falling edge trigger interrupt
     // set bit to 1 to not mask interrupt
@@ -101,7 +114,7 @@ void Quad4meBase::disble_alrt_fall()
     EXTI->PR = quad4me_config::ALRT_EXTI_BIT; // writing bit clears it
 }
 
-void Quad4meBase::enable_alrt_fall()
+void TriQuad::enable_alrt_fall()
 {
     // enable rising and falling edge trigger interrupt
     // set bit to 1 to not mask interrupt
@@ -109,11 +122,10 @@ void Quad4meBase::enable_alrt_fall()
 }
 
 
-void Quad4meBase::clr_alrt_fall()
+void TriQuad::clr_alrt_fall()
 {
     EXTI->PR = quad4me_config::ALRT_EXTI_BIT; // writing bit clears it
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 
-} // namespace quad4me
-
+} // namespace triquad

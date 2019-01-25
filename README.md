@@ -239,7 +239,7 @@ Finally, if this was Stack Overflow, the *second* answer to everything I've writ
 
 The original name for the three-line protocol was "tri2c". Stupid pun off some other serial protocol I'd heard of. But, you know ... lawyers and all that. So I came up with "tri2b", as in it "tries to be" a workable protocol.
 
-Due to some development snafus that I don't care to describe (eventually traced to a certain GCC-ARM compiler optimizing out calls to inline functions despite those functions accessing declared-volatile registers) (days, not weeks -- nobody said anything about "weeks") I was for a time convinced that the edge based approach (see [Edge- vs level-based](#edge_vs_level_based)) of tri2b was flawed by design. In desperation I switched development to the level-based quad4me, it being the fallback solution "for me".
+Due to some development snafus that I don't care to describe (eventually traced to a certain GCC-ARM compiler optimizing out calls to inline functions despite those functions accessing declared-volatile registers) (days, not weeks -- nobody said anything about "weeks") I was for a time convinced that the edge based approach (see [Edge- vs level-based](#edge_vs_level_based)) of tri2b was flawed by design. In desperation I switched development to a new four-line, level-based  protocol and named it "quad4me" because it was the fallback solution "for me".
 
 I have long thought that when it comes to software libraries, the "cuter" the name, the lower the quality. Your mileage may vary.
 
@@ -273,11 +273,9 @@ What? You're still here? Alright ... I'll provide some more details ...
 
 The state machines actually consist of two levels:
 
-<a name="states"></a>
-1) A lower-level set of states, per-line-transition, called simply "States". The states are READ, WRIT ("write"), and in the case of quad4me, NEXT. Each bit of a message requires a transition through each of these states in sequence.
+1. <a name="states"></a> A lower-level set of states, per-line-transition, called simply "States". The states are READ, WRIT ("write"), and in the case of quad4me, NEXT. Each bit of a message requires a transition through each of these states in sequence.
 
-<a name="phases"></a>
-2) A higher-level set of states called "Phases". Multiple bits, each communicated via the READ/WRITE/(NEXT) States, make up the phases: IDLE, ARBT (arbitration), META (metadata), and DATA (data). The IDLE phase has zero bits, ARBT and META a fixed number, and DATA a variable number (possibly zero) specified by the META bits, (see [meta2bits()](#meta2bits), below)).
+2. <a name="phases"></a> A higher-level set of states called "Phases". Multiple bits, each communicated via the READ/WRITE/(NEXT) States, make up the phases: IDLE, ARBT (arbitration), META (metadata), and DATA (data). The IDLE phase has zero bits, ARBT and META a fixed number, and DATA a variable number (possibly zero) specified by the META bits, (see [meta2bits()](#meta2bits), below)).
 
 
 ### tri2b protocol <a name="tri2b_protocol"></a>
@@ -753,9 +751,10 @@ I will not combine the code into a Debian package, RedHat RPM, or (shudder) Wind
 
 ### Repository directories and files <a name="repository_directories_and_files"></a>
 
-        +-build/
         +-LICENSE.txt
+        +-README.html
         +-README.md
+        +-build/
         | +-Makefile.base
         | +-Makefile.triquad
         | +-Makefile.triquad_nxp
@@ -849,8 +848,11 @@ I will not combine the code into a Debian package, RedHat RPM, or (shudder) Wind
         +-randomtest/
         | +-randomtest.cxx
         +-tri2b/
-          +-tri2b_base.cxx
-          +-tri2b_base.hxx
+        | +-tri2b_base.cxx
+        | +-tri2b_base.hxx
+        +-triquad/
+          +-tri_quad.cxx
+          +-tri_quad.hxx
 
 In addition to this `README.md`, see comments/documentation in the files themselves.
 
@@ -859,6 +861,11 @@ In addition to this `README.md`, see comments/documentation in the files themsel
 See [The testbed](#the_testbed), below.
 
 Can be compiled to use either tri2b or quad4me protocol.
+
+
+#### tri_quad.[ch]xx
+
+TriQuad base/interface class for Tri2bBase and Quad4meBase protocol implementations, [directly below](#base_implementations). Data members and methods common to both protocols.
 
 
 <a name="base_implementations"></a>

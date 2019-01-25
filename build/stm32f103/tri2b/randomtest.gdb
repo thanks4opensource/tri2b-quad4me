@@ -124,7 +124,6 @@ define results
     printf "_NUM_NODES   : %d\n",   randomtest::triquad_random._NUM_NODES
     printf "_ARBT_BITS   : %d\n",   randomtest::triquad_random._ARBT_BITS
     printf "_META_BITS   : %d\n",   randomtest::triquad_random._META_BITS
-    printf "_NODE_ID     : %d\n",   randomtest::triquad_random._NODE_ID
     echo mcu          : \ 
     output randomtest::MCU_STRING
     echo \n
@@ -278,9 +277,9 @@ end
 # dprintf tri2b::Tri2bBase::protocol, \
 
 # GDB coredumps if attempt to set breakpoint at (this particular) label
-# dprintf tri2b_base.cxx:loop
+# dprintf triquad::TriQuad::protocol:loop, \
 
-dprintf tri2b_base.cxx:162, \
+dprintf tri2b_base.cxx:174, \
 "L %d%d %s-%s-%s %c%c%c->%c%c%c %c%c%c%c %02d/%02d %08x-%08x-%08x %x:%02d:%-2d  %2d/%c/0x%08x\n", \
 _NODE_ID, \
 _rank, \

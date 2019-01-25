@@ -5,7 +5,7 @@
 
 
 
-namespace quad4me {
+namespace triquad {
 
 class Quad4me : public Quad4meBase {
   public:
@@ -22,7 +22,8 @@ class Quad4me : public Quad4meBase {
                     node_id       )
     {}
 
-    void init();
+    void    init (),
+            reset();
 
 
   protected:
@@ -30,6 +31,6 @@ class Quad4me : public Quad4meBase {
 
 }; // class Quad4me
 
-} // namespace lpc
+} // namespace triquad
 
 #endif   // ifndef quad4me_hxx

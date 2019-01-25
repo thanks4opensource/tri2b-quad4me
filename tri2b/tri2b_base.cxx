@@ -42,7 +42,7 @@
 
 
 
-namespace tri2b {
+namespace triquad {
 
 void Tri2bBase::reset()
 {
@@ -60,22 +60,13 @@ void Tri2bBase::reset()
     // if first node to get here will break others out of sync wait loop above
     clr_ltch();
 
-    // wait again
-    reset_delay_start();
-    while (reset_delay_wait())
-        asm("nop");
+    TriQuad::reset();  // finish reset protocol
 
-    _phase = Phase::IDLE;
-
-#ifdef TRIQUAD_INTERRUPTS
-    enable_interrupt();
-    enable_alrt_fall();
-#endif
 }  // void Tri2bBase::reset()
 
 
 
-bool Tri2bBase::protocol()
+bool TriQuad::protocol()
 {
     // returns true when message complete (send or receive)
     // ifdef TRIQUAD_BIT_BY_BIT    returns false when message in progress
@@ -131,7 +122,7 @@ bool Tri2bBase::protocol()
             else                 clr_data();
 
             _role = Role::SENDER;
-            T2B_SCOR(Scor::PEND);
+            TQ_SCOR(Scor::PEND) ;
         }
         else {
             _sendbuf = ALL_HIGH;  // not competing in arbitration
@@ -139,7 +130,7 @@ bool Tri2bBase::protocol()
             set_data();
 
             _role = Role::RECVER;
-            T2B_SCOR(Scor::RCVR);
+            TQ_SCOR(Scor::RCVR) ;
         }
 
         set_ltch();
@@ -162,7 +153,7 @@ bool Tri2bBase::protocol()
         if (_state == State::READ) {
             if (!ltch_rise()) RETURN_OR_CONTINUE;
 
-            T2B_WAITS;
+            TQ_WAITS;
 
             clr_ltch_rise();
 
@@ -179,7 +170,7 @@ bool Tri2bBase::protocol()
         else {  // _state == State::WRIT
             if (!alrt_rise()) RETURN_OR_CONTINUE;
 
-            T2B_WAITS;
+            TQ_WAITS;
 
             clr_alrt_rise();
 
@@ -236,7 +227,7 @@ bool Tri2bBase::protocol()
 
                     _arbt = _recvbuf;  // must be before dynamic_rank()
 #ifdef DYNAMIC_RANK
-                    dynamic_rank();    // adjust _rank
+                    static_cast<TriQuad*>(this)->dynamic_rank();  // adjust rank
 #endif
                     _recvbuf = 0                ;  // reset for META phase
                     _bit = 1 << (_META_BITS - 1);  //   set for META phase
@@ -301,66 +292,15 @@ bool Tri2bBase::protocol()
 #endif
     }  // while (true)
 
-}  // bool Tri2bBase::protocol()
-
-
-
-#ifdef DYNAMIC_RANK
-void Tri2bBase::dynamic_rank()
-{
-    // least-recently used priority algorithm
-    // numerically lower _rank == higher priority
-    //
-    // nodes with ranks in range [MIN_DYNAMIC_RANK, MAX_DYNAMIC_RANK]
-    // change priority after arbitration finished:
-    // if sender and won arbitration, move to MAX_DYNAMIC_RANK
-    // else move numerically down one (up one in priority)
-    //
-    // client needs to use RankId class to track rank/arbt() to ID mapping
-    //
-    // #ifndef DYNAMIC_RANK, using unchanging _NODE_ID as _rank/priority
-
-    if (
-#if MIN_DYNAMIC_RANK > 0     // avoid compiler warning, uint>=0, always true
-            _rank >= MIN_DYNAMIC_RANK
-        &&
-#endif
-           _rank <= MAX_DYNAMIC_RANK)
-        if (_rank == _arbt)     // winner: move to highest numeric
-                                // value (lowest priority)
-            _rank = MAX_DYNAMIC_RANK;
-        else if (_rank > _arbt) // loser: lower numeric value
-            _rank -= 1;         // (higher priority)
-
-}  // void Tri2bBase::dynamic_rank()
-#endif
+}  // bool TriQuad::protocol()
 
 
 
 #ifdef TRIQUAD_STATE_STRINGS
-const char  *Tri2bBase::_STATE_STRINGS[] = {
+const char  *TriQuad::_STATE_STRINGS[] = {
         "RD",
         "WR",
 };
-const char  *Tri2bBase::_PHASE_STRINGS[] = {
-        "ID",
-        "AR",
-        "ME",
-        "DA",
-};
-const char  *Tri2bBase::_ROLE_STRINGS[] = {
-        "S",
-        "R",
-};
 #endif   // ifdef TRIQUAD_STATE_STRINGS
-#ifdef TRIQUAD_STATS
-const char  *Tri2bBase::_SCOR_STRINGS[] = {
-        "PND",
-        "RCV",
-        "WIN",
-        "NZW",
-        "LOS",
-};
-#endif   // ifdef TRIQUAD_STATS
 
-} // namespace tri2b
+} // namespace triquad

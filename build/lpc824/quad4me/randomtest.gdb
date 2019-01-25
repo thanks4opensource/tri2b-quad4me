@@ -90,9 +90,9 @@ arbt, \
 randomtest::triquad_random._PHASE_STRINGS[randomtest::triquad_random._phase], \
 randomtest::triquad_random. _SCOR_STRINGS[randomtest::triquad_random._scor ], \
 \
-LPC_MRT->Channel[DELAY_CHANNEL].STAT & mrt::status::IS_RUNNING_BIT ? 'r' : '.', \
-LPC_MRT->Channel[DELAY_CHANNEL].TIMER, \
-LPC_MRT->Channel[DELAY_CHANNEL].INTVAL, \
+LPC_MRT->Channel[RANDOM_DELAY_CHANNEL].STAT & mrt::status::IS_RUNNING_BIT ? 'r' : '.', \
+LPC_MRT->Channel[RANDOM_DELAY_CHANNEL].TIMER, \
+LPC_MRT->Channel[RANDOM_DELAY_CHANNEL].INTVAL, \
 meta, \
 data, \
 num_sends, \
@@ -123,7 +123,6 @@ define results
     printf "_NUM_NODES   : %d\n",   randomtest::triquad_random._NUM_NODES
     printf "_ARBT_BITS   : %d\n",   randomtest::triquad_random._ARBT_BITS
     printf "_META_BITS   : %d\n",   randomtest::triquad_random._META_BITS
-    printf "_NODE_ID     : %d\n",   randomtest::triquad_random._NODE_ID
     echo mcu          : \ 
     output randomtest::MCU_STRING
     echo \n
@@ -309,8 +308,10 @@ _pendmet	    , \
 _pending ? 'p' : '.', \
 _pendbuf
 
-# dprintf quad4me::Quad4meBase::protocol:loop
-dprintf quad4me_base.cxx:226, \
+# GDB coredumps if attempt to set breakpoint at (this particular) label
+# dprintf triquad::TriQuad::protocol:loop, \
+
+dprintf quad4me_base.cxx:178, \
 "L %d%d %s-%s-%s %c%c%c%c->%c%c%c%c %c%c%c%c%c %02d/%02d %08x-%08x-%08x %x:%02d:%-2d  %2d/%c/0x%08x\n", \
 _NODE_ID, \
 _rank, \

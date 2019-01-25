@@ -26,7 +26,7 @@ using namespace baresil::stm32f10_12357_xx;
 
 
 
-namespace quad4me {
+namespace triquad {
 
 // Quad4me derived class-specific methods
 //
@@ -85,6 +85,18 @@ void Quad4me::init()
     // not really one shot, will run continuously
     arm::SysTick::one_shot(arm::SysTick::MAX_COUNTS);
 #endif
+}  // Quad4me::init()
+
+
+
+void Quad4me::reset()
+{
+    Quad4meBase::reset();
+    TriQuad    ::reset();
+#ifdef TRIQUAD_INTERRUPTS
+    enable_interrupt();
+    enable_alrt_fall();
+#endif
 }
 
 
@@ -92,21 +104,7 @@ void Quad4me::init()
 // Quad4meBase architecture-specific implemented methods
 //
 
-void Quad4meBase::post_reset()
-{
-    if (quad4me_config::RANDOM_DELAY_TIMER == quad4me_config::RESET_NODES_TIMER)
-        // reset timebase because reusing same timer
-
-        reset_timer.init(quad4me_config::RANDOM_DELAY_TIMER,
-                         static_cast<uint16_t>(  baresil
-                                               ::stm32f10_12357_xx
-                                               ::mcu
-                                               ::microseconds_to_clocks(1)));
-}
-
-
-
-void Quad4meBase::reset_delay_start()
+void TriQuad::reset_delay_start()
 {
     reset_timer.init(quad4me_config::RESET_NODES_TIMER,
                      static_cast<uint16_t>(  baresil
@@ -118,7 +116,7 @@ void Quad4meBase::reset_delay_start()
 }
 
 
-bool Quad4meBase::reset_delay_wait()
+bool TriQuad::reset_delay_wait()
 {
     return reset_timer.is_running();
 }
@@ -126,7 +124,7 @@ bool Quad4meBase::reset_delay_wait()
 
 
 #ifdef TRIQUAD_INTERRUPTS
-void Quad4meBase::enable_interrupt() {
+void TriQuad::enable_interrupt() {
     // clear any pending edge detection
     EXTI->PR = quad4me_config::ALRT_EXTI_BIT;    // write 1 clears
 
@@ -145,7 +143,7 @@ void Quad4meBase::enable_interrupt() {
 
 
 #if TRIQUAD_DATA_WAIT_US > 0
-void Quad4meBase::set_data() {
+void TriQuad::set_data() {
     quad4me_config::GPIO->BSRR = quad4me_config::DATA_GPIO_BIT;
 
     uint32_t    systick_start = arm::SysTick::count();
@@ -176,4 +174,4 @@ void Quad4meBase::set_data() {
 
 
 
-} // namespace quad4me
+} // namespace triquad

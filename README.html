@@ -272,7 +272,7 @@ outputs on the next (or later) clock cycle without knowing they&rsquo;re late, a
 
 <p>The original name for the three-line protocol was &ldquo;tri2c&rdquo;. Stupid pun off some other serial protocol I&rsquo;d heard of. But, you know &hellip; lawyers and all that. So I came up with &ldquo;tri2b&rdquo;, as in it &ldquo;tries to be&rdquo; a workable protocol.</p>
 
-<p>Due to some development snafus that I don&rsquo;t care to describe (eventually traced to a certain GCC-ARM compiler optimizing out calls to inline functions despite those functions accessing declared-volatile registers) (days, not weeks &ndash; nobody said anything about &ldquo;weeks&rdquo;) I was for a time convinced that the edge based approach (see <a href="#edge_vs_level_based">Edge- vs level-based</a>) of tri2b was flawed by design. In desperation I switched development to the level-based quad4me, it being the fallback solution &ldquo;for me&rdquo;.</p>
+<p>Due to some development snafus that I don&rsquo;t care to describe (eventually traced to a certain GCC-ARM compiler optimizing out calls to inline functions despite those functions accessing declared-volatile registers) (days, not weeks &ndash; nobody said anything about &ldquo;weeks&rdquo;) I was for a time convinced that the edge based approach (see <a href="#edge_vs_level_based">Edge- vs level-based</a>) of tri2b was flawed by design. In desperation I switched development to a new four-line, level-based  protocol and named it &ldquo;quad4me&rdquo; because it was the fallback solution &ldquo;for me&rdquo;.</p>
 
 <p>I have long thought that when it comes to software libraries, the &ldquo;cuter&rdquo; the name, the lower the quality. Your mileage may vary.</p>
 
@@ -302,11 +302,11 @@ outputs on the next (or later) clock cycle without knowing they&rsquo;re late, a
 
 <p>The state machines actually consist of two levels:</p>
 
-<p><a name="states"></a>
-1) A lower-level set of states, per-line-transition, called simply &ldquo;States&rdquo;. The states are READ, WRIT (&ldquo;write&rdquo;), and in the case of quad4me, NEXT. Each bit of a message requires a transition through each of these states in sequence.</p>
+<ol>
+<li><p><a name="states"></a> A lower-level set of states, per-line-transition, called simply &ldquo;States&rdquo;. The states are READ, WRIT (&ldquo;write&rdquo;), and in the case of quad4me, NEXT. Each bit of a message requires a transition through each of these states in sequence.</p></li>
+<li><p><a name="phases"></a> A higher-level set of states called &ldquo;Phases&rdquo;. Multiple bits, each communicated via the READ/WRITE/(NEXT) States, make up the phases: IDLE, ARBT (arbitration), META (metadata), and DATA (data). The IDLE phase has zero bits, ARBT and META a fixed number, and DATA a variable number (possibly zero) specified by the META bits, (see <a href="#meta2bits">meta2bits()</a>, below)).</p></li>
+</ol>
 
-<p><a name="phases"></a>
-2) A higher-level set of states called &ldquo;Phases&rdquo;. Multiple bits, each communicated via the READ/WRITE/(NEXT) States, make up the phases: IDLE, ARBT (arbitration), META (metadata), and DATA (data). The IDLE phase has zero bits, ARBT and META a fixed number, and DATA a variable number (possibly zero) specified by the META bits, (see <a href="#meta2bits">meta2bits()</a>, below)).</p>
 
 <h3>tri2b protocol <a name="tri2b_protocol"></a></h3>
 
@@ -769,9 +769,10 @@ One of those contexts, at least with the GCC-ARM compiler, is a C/C++ <code>swit
 
 <h3>Repository directories and files <a name="repository_directories_and_files"></a></h3>
 
-<pre><code>    +-build/
-    +-LICENSE.txt
+<pre><code>    +-LICENSE.txt
+    +-README.html
     +-README.md
+    +-build/
     | +-Makefile.base
     | +-Makefile.triquad
     | +-Makefile.triquad_nxp
@@ -865,8 +866,11 @@ One of those contexts, at least with the GCC-ARM compiler, is a C/C++ <code>swit
     +-randomtest/
     | +-randomtest.cxx
     +-tri2b/
-      +-tri2b_base.cxx
-      +-tri2b_base.hxx
+    | +-tri2b_base.cxx
+    | +-tri2b_base.hxx
+    +-triquad/
+      +-tri_quad.cxx
+      +-tri_quad.hxx
 </code></pre>
 
 <p>In addition to this <code>README.md</code>, see comments/documentation in the files themselves.</p>
@@ -876,6 +880,10 @@ One of those contexts, at least with the GCC-ARM compiler, is a C/C++ <code>swit
 <p>See <a href="#the_testbed">The testbed</a>, below.</p>
 
 <p>Can be compiled to use either tri2b or quad4me protocol.</p>
+
+<h4>tri_quad.[ch]xx</h4>
+
+<p>TriQuad base/interface class for Tri2bBase and Quad4meBase protocol implementations, <a href="#base_implementations">directly below</a>. Data members and methods common to both protocols.</p>
 
 <p><a name="base_implementations"></a></p>
 

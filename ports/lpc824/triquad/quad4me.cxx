@@ -17,13 +17,8 @@
 
 
 
-// OK if same as e.g. randomtest_port.inl's #ifdef RANDOM_DELAY_US because
-// never used at same time
-static const uint8_t    MRT_CHANNEL = 0;
 
-
-
-namespace quad4me {
+namespace triquad {
 
 // Quad4me derived class-specific methods
 //
@@ -91,27 +86,33 @@ void Quad4me::open_drain()
 
 
 
-// Quad4meBase architecture-specific implemented methods
-//
-
-void Quad4meBase::post_reset()
+void Quad4me::reset()
 {
+    Quad4meBase::reset();
+    TriQuad    ::reset();
+#ifdef TRIQUAD_INTERRUPTS
+    enable_interrupt();
+    enable_alrt_fall();
+#endif
 }
 
 
 
-void Quad4meBase::reset_delay_start()
+// Quad4meBase architecture-specific implemented methods
+//
+
+void TriQuad::reset_delay_start()
 {
-    lpc::MRT::one_shot(MRT_CHANNEL,
+    lpc::MRT::one_shot(quad4me_config::SYNC_NODES_MRT_CHANNEL,
                          mcu
                        ::milliseconds_to_clocks(  quad4me_config
                                                 ::SYNC_NODES_DELAY_MILLISECS));
 }
 
 
-bool Quad4meBase::reset_delay_wait()
+bool TriQuad::reset_delay_wait()
 {
-    return lpc::MRT::is_running(MRT_CHANNEL);
+    return lpc::MRT::is_running(quad4me_config::SYNC_NODES_MRT_CHANNEL);
 }
 
 
@@ -119,7 +120,7 @@ bool Quad4meBase::reset_delay_wait()
 #undef LEVEL_SENSITIVE   // DEBUG
 #define EDGE_SENSITIVE   // DEBUG
 
-void Quad4meBase::enable_interrupt() {
+void TriQuad::enable_interrupt() {
 #ifdef LEVEL_SENSITIVE
     // set to level (vs edge) sensitive
     LPC_PIN_INT->ISEL = quad4me_config::ALRT_PININT_BIT;
@@ -159,7 +160,7 @@ void Quad4meBase::enable_interrupt() {
 //
 
 #if TRIQUAD_DATA_WAIT_US > 0
-void Quad4meBase::set_data() {
+void TriQuad::set_data() {
     LPC_GPIO_PORT->B0[quad4me_config::DATA_GPIO_NDX] = 1;
 
     uint32_t    systick_start = arm::SysTick::count();
@@ -190,4 +191,4 @@ void Quad4meBase::set_data() {
 
 
 
-} // namespace quad4me
+} // namespace triquad

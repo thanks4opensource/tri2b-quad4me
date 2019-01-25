@@ -45,14 +45,17 @@
 
 
 
-namespace quad4me {
+namespace triquad {
 
 void Quad4meBase::reset()
 {
     // see README.md for description/discussion
 
     // wait for all nodes to do same (all lines high)
-    while (!data() || !alrt() || !ltch() || !cycl())
+    while (   !data()
+           || !alrt()
+           || !ltch()
+           || !static_cast<Quad4meBase*>(this)->cycl())
         asm("nop");
 
 
@@ -64,22 +67,13 @@ void Quad4meBase::reset()
     // if first node to get here will break others out of sync wait loop above
     clr_ltch();
 
-    // wait again
-    reset_delay_start();
-    while (reset_delay_wait())
-        asm("nop");
+    TriQuad::reset();  // finish reset protocol
 
-    _phase = Phase::IDLE;
-
-#ifdef TRIQUAD_INTERRUPTS
-    enable_interrupt();
-    enable_alrt_fall();
-#endif
-}  // void Quad4meBase::reset()
+}  // void Tri2bBase::reset()
 
 
 
-bool Quad4meBase::protocol()
+bool TriQuad::protocol()
 {
     // returns true when message complete (send or receive)
     // ifdef TRIQUAD_BIT_BY_BIT    returns false when message in progress
@@ -130,7 +124,7 @@ bool Quad4meBase::protocol()
             else                 clr_data();
 
             _role = Role::SENDER;
-            Q4M_SCOR(Scor::PEND);
+            TQ_SCOR(Scor::PEND);
         }
         else {
             _sendbuf = ALL_HIGH;  // not competing in arbitration
@@ -138,7 +132,7 @@ bool Quad4meBase::protocol()
             set_data();
 
             _role = Role::RECVER;
-            Q4M_SCOR(Scor::RCVR);
+            TQ_SCOR(Scor::RCVR);
         }
 
         set_ltch();
@@ -160,9 +154,10 @@ bool Quad4meBase::protocol()
 
         switch (_state) {
             case State::WRIT:
-                if (!cycl()) RETURN_OR_CONTINUE;
+                if (!static_cast<Quad4meBase*>(this)->cycl())
+                    RETURN_OR_CONTINUE;
 
-                Q4M_WAITS
+                TQ_WAITS
 
                 if (_sendbuf & _bit) set_data();
                 else                 clr_data();
@@ -179,14 +174,14 @@ bool Quad4meBase::protocol()
             case State::READ:
                 if (!ltch()) RETURN_OR_CONTINUE;
 
-                Q4M_WAITS
+                TQ_WAITS
 
                 _recvbuf   = (_recvbuf << 1) | data();
                 _bit     >>= 1                       ;
 
                 // step protocol
-                clr_cycl();
-                set_alrt();
+                static_cast<Quad4meBase*>(this)->clr_cycl();
+                                                 set_alrt();
 
                 _state = State::NEXT;
 
@@ -196,7 +191,7 @@ bool Quad4meBase::protocol()
             case State::NEXT:
             if (!alrt()) RETURN_OR_CONTINUE;
 
-            Q4M_WAITS
+            TQ_WAITS
 
             // step protocol
             clr_ltch();
@@ -215,7 +210,8 @@ bool Quad4meBase::protocol()
                 break;
 
             case Phase::ARBT:
-                set_cycl();  // can't be done (always) in State::NEXT
+                // can't be done (always) in State::NEXT
+                static_cast<Quad4meBase*>(this)->set_cycl();
 
                 if (_recvbuf != static_cast<uint32_t>(_rank >> _arbtbit)) {
                     // have lost arbitration: own bit was 1, one or more
@@ -258,7 +254,8 @@ bool Quad4meBase::protocol()
 
 
             case Phase::META:
-                set_cycl();  // can't be done (always) in State::NEXT
+                // can't be done (always) in State::NEXT
+                static_cast<Quad4meBase*>(this)->set_cycl();
 
                 if (!_bit) {  // meta finished
                     if (_role == Role::SENDER)
@@ -288,10 +285,12 @@ bool Quad4meBase::protocol()
                     // if TRIQUAD_DATA_WAIT_US > 0 and set_data() is waiting
                     // for actual high on line but another node gets ahead
                     // into setting arbitration bit low at IDLE/ARBT
-                    set_cycl();
+                    static_cast<Quad4meBase*>(this)->set_cycl();
 
                     // wait for all nodes to finish message
-                    while (!(cycl() && alrt() && !ltch()))
+                    while (!(   static_cast<Quad4meBase*>(this)->cycl()
+                             &&                                 alrt()
+                             &&                                !ltch()))
                         asm("nop");
                     set_data();
                     _phase = Phase::IDLE;
@@ -300,7 +299,8 @@ bool Quad4meBase::protocol()
                     return true;
                 }
 
-                set_cycl();  // can't be done (always) in State::NEXT
+                // can't be done (always) in State::NEXT
+                static_cast<Quad4meBase*>(this)->set_cycl();
 
                 break;
         }  // switch (_phase)
@@ -310,65 +310,16 @@ bool Quad4meBase::protocol()
 #endif
     }  // while (true)
 
-}  // bool Quad4meBase::protocol()
-
-
-
-#ifdef DYNAMIC_RANK
-void Quad4meBase::dynamic_rank()
-{
-    // least-recently used priority algorithm
-    // numerically lower _rank == higher priority
-    //
-    // nodes with ranks in range [MIN_DYNAMIC_RANK, MAX_DYNAMIC_RANK]
-    // change priority after arbitration finished:
-    // if sender and won arbitration, move to MAX_DYNAMIC_RANK
-    // else move numerically down one (up one in priority)
-    //
-    // client needs to use RankId class to track rank/arbt() to ID mapping
-    //
-    // #ifndef DYNAMIC_RANK, using unchanging _NODE_ID as _rank/priority
-
-    if (
-#if MIN_DYNAMIC_RANK > 0     // avoid compiler warning, uint>=0, always true
-            _rank >= MIN_DYNAMIC_RANK
-        &&
-#endif
-           _rank <= MAX_DYNAMIC_RANK)
-        if (_rank == _arbt)     // winner: move to highest numeric
-                                // value (lowest priority)
-            _rank = MAX_DYNAMIC_RANK;
-        else if (_rank > _arbt) // loser: lower numeric value
-            _rank -= 1;         // (higher priority)
-}  // void Quad4meBase::dynamic_rank()
-#endif
+}  // bool TriQuad::protocol()
 
 
 
 #ifdef TRIQUAD_STATE_STRINGS
-const char  *Quad4meBase::_STATE_STRINGS[] = {
+const char  *TriQuad::_STATE_STRINGS[] = {
         "RD",
         "WR",
         "NX",
 };
-const char  *Quad4meBase::_PHASE_STRINGS[] = {
-        "ID",
-        "AR",
-        "ME",
-        "DA",
-};
-const char  *Quad4meBase::_ROLE_STRINGS[] = {
-        "S",
-        "R",
-};
 #endif   // ifdef TRIQUAD_STATE_STRINGS
-#ifdef TRIQUAD_STATS
-const char  *Quad4meBase::_SCOR_STRINGS[] = {
-        "PND",
-        "RCV",
-        "WIN",
-        "NZW",
-        "LOS",
-};
-#endif   // ifdef TRIQUAD_STATS
-} // namespace quad4me
+
+} // namespace triquad

@@ -14,15 +14,15 @@
 #include <tri2b_config.hxx>
 
 
-namespace tri2b {
+namespace triquad {
 
 #ifdef TRIQUAD_STATS
-void Tri2bBase::waits_begn()
+void TriQuad::waits_begn()
 {
     _systick_start = arm::SysTick::count();
 }
 
-void Tri2bBase::waits_incr()
+void TriQuad::waits_incr()
 {
     _waits         += arm::SysTick::elapsed(_systick_start);
     _systick_start  = arm::SysTick::count  (              );
@@ -33,7 +33,7 @@ void Tri2bBase::waits_incr()
 
 
 #define TRI2B_LINE(ALRT_LTCH_DATA, GPIO_BIT)        \
-bool Tri2bBase::ALRT_LTCH_DATA()                    \
+bool TriQuad::ALRT_LTCH_DATA()                  \
 volatile const                                      \
 {                                                   \
     asm volatile("" ::: "memory");                  \
@@ -47,29 +47,29 @@ TRI2B_LINE(data, tri2b_config::DATA_GPIO_BIT)
 #undef TRI2B_LINE
 
 
-bool Tri2bBase::alrt_rise()
+bool TriQuad::alrt_rise()
 {
     return  bitops::GET_BITS(EXTI->PR, tri2b_config::ALRT_EXTI_BIT);
 }
 
-bool Tri2bBase::ltch_rise()
+bool TriQuad::ltch_rise()
 {
     return bitops::GET_BITS(EXTI->PR, tri2b_config::LTCH_EXTI_BIT);
 }
 
 
-void Tri2bBase::clr_alrt_rise()
+void TriQuad::clr_alrt_rise()
 {
     EXTI->PR = tri2b_config::ALRT_EXTI_BIT; // writing bit clears it
 }
 
-void Tri2bBase::clr_ltch_rise()
+void TriQuad::clr_ltch_rise()
 {
     EXTI->PR = tri2b_config::LTCH_EXTI_BIT; // writing bit clears it
 }
 
 #ifdef TRIQUAD_INTERRUPTS
-void Tri2bBase::clr_alrt_fall()
+void TriQuad::clr_alrt_fall()
 {
     EXTI->PR = tri2b_config::ALRT_EXTI_BIT; // writing bit clears it
 }
@@ -81,7 +81,7 @@ void Tri2bBase::clr_alrt_fall()
 #if TRIQUAD_MIN_HIGH_US == 0
 
 #define TRI2B_SET(ALRT_LTCH, GPIO_BIT)      \
-void Tri2bBase::set_##ALRT_LTCH()           \
+void TriQuad::set_##ALRT_LTCH()         \
 {                                           \
     asm volatile("" ::: "memory");          \
     tri2b_config::GPIO->BSRR = GPIO_BIT;    \
@@ -92,7 +92,7 @@ TRI2B_SET(ltch, tri2b_config::LTCH_GPIO_BIT)
 
 
 #define TRI2B_CLR(ALRT_LTCH, GPIO_BIT)      \
-void Tri2bBase::clr_##ALRT_LTCH()           \
+void TriQuad::clr_##ALRT_LTCH()         \
 {                                           \
     asm volatile("" ::: "memory");          \
     tri2b_config::GPIO->BRR = GPIO_BIT;     \
@@ -103,30 +103,40 @@ TRI2B_CLR(ltch, tri2b_config::LTCH_GPIO_BIT)
 
 #else  // #if TRIQUAD_MIN_HIGH_US == 0
 
-#define TRI2B_SET(ALRT_LTCH, GPIO_BIT)          \
-void Tri2bBase::set_##ALRT_LTCH()               \
-{                                               \
-    asm volatile("" ::: "memory")          ;    \
-    tri2b_config::GPIO->BSRR = GPIO_BIT    ;    \
-    _min_high_start = arm::SysTick::count();    \
+void Tri2bBase::start_min_high()
+{
+    _min_high_start = arm::SysTick::count();
+}
+
+#define TRI2B_SET(ALRT_LTCH, GPIO_BIT)                  \
+void TriQuad::set_##ALRT_LTCH()                         \
+{                                                       \
+    asm volatile("" ::: "memory")                  ;    \
+    tri2b_config::GPIO->BSRR = GPIO_BIT            ;    \
+    static_cast<Tri2bBase*>(this)->start_min_high();    \
 }
 TRI2B_SET(alrt, tri2b_config::ALRT_GPIO_BIT)
 TRI2B_SET(ltch, tri2b_config::LTCH_GPIO_BIT)
 #undef TRI2B_SET
 
+void Tri2bBase::wait_min_high()
+{
+    while (  arm::SysTick::elapsed(_min_high_start)
+           <    baresil
+              ::stm32f10_12357_xx
+              ::mcu
+              ::microseconds_to_clocks(TRIQUAD_MIN_HIGH_US))
+        asm("nop");
+}
 
-#define TRI2B_CLR(ALRT_LTCH, GPIO_BIT)                          \
-void Tri2bBase::clr_##ALRT_LTCH()                               \
-{                                                               \
-    while (  arm::SysTick::elapsed(_min_high_start)             \
-           <    baresil                                         \
-              ::stm32f10_12357_xx                               \
-              ::mcu                                             \
-              ::microseconds_to_clocks(TRIQUAD_MIN_HIGH_US))    \
-        asm("nop");                                             \
-                                                                \
-    asm volatile("" ::: "memory");                              \
-    tri2b_config::GPIO->BRR = GPIO_BIT;                         \
+
+#define TRI2B_CLR(ALRT_LTCH, GPIO_BIT)                  \
+void TriQuad::clr_##ALRT_LTCH()                         \
+{                                                       \
+    static_cast<Tri2bBase*>(this)->wait_min_high();     \
+                                                        \
+    asm volatile("" ::: "memory");                      \
+    tri2b_config::GPIO->BRR = GPIO_BIT;                 \
 }
 TRI2B_CLR(alrt, tri2b_config::ALRT_GPIO_BIT)
 TRI2B_CLR(ltch, tri2b_config::LTCH_GPIO_BIT)
@@ -137,17 +147,17 @@ TRI2B_CLR(ltch, tri2b_config::LTCH_GPIO_BIT)
 
 
 #if TRIQUAD_DATA_WAIT_US == 0
-void Tri2bBase::set_data()
+void TriQuad::set_data()
 {
     asm volatile("" ::: "memory")                         ;
     tri2b_config::GPIO->BSRR = tri2b_config::DATA_GPIO_BIT;
 }
-void Tri2bBase::clr_data() {
+void TriQuad::clr_data() {
     tri2b_config::GPIO->BRR = tri2b_config::DATA_GPIO_BIT;
 }
 #else
 // set_data() non-inline, implemented in tri2b.cxx
-void Tri2bBase::clr_data() {
+void TriQuad::clr_data() {
     tri2b_config::GPIO->BRR = tri2b_config::DATA_GPIO_BIT;
     _prev_data = 0;
 }
@@ -156,7 +166,7 @@ void Tri2bBase::clr_data() {
 
 
 #ifdef TRIQUAD_INTERRUPTS
-void Tri2bBase::disble_alrt_fall()
+void TriQuad::disble_alrt_fall()
 {
     // disable falling edge detection
     bitops::CLR_BITS(EXTI->FTSR, tri2b_config::ALRT_EXTI_BIT);
@@ -171,7 +181,7 @@ void Tri2bBase::disble_alrt_fall()
 #endif
 }
 
-void Tri2bBase::enable_alrt_fall()
+void TriQuad::enable_alrt_fall()
 {
     // enable falling edge detection
     bitops::SET_BITS(EXTI->FTSR, tri2b_config::ALRT_EXTI_BIT);
@@ -184,4 +194,4 @@ void Tri2bBase::enable_alrt_fall()
 }
 #endif   // ifdef TRIQUAD_INTERRUPTS
 
-} // namespace tri2b
+} // namespace triquad
